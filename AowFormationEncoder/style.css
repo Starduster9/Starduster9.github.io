@@ -1,0 +1,61 @@
+:root{
+  --bg:#0b1020; --card:#121a35; --line:#233055; --text:#f3f6ff; --muted:#b8c2df; --accent:#5b79ff;
+  --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --focus:#93c5fd;
+  --radius:16px; --space:16px; --space-lg:22px; --shadow:0 8px 24px rgba(0,0,0,.30);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text);}
+
+/* 헤더 */
+header{position:sticky; top:0; z-index:10; backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(11,16,32,.95), rgba(11,16,32,.7));
+  border-bottom:1px solid var(--line); padding:18px var(--space);
+}
+.title{display:flex; gap:12px; align-items:center;}
+.title h1{margin:0; font-size: clamp(20px, 3.8vw, 32px); letter-spacing:.2px}
+.subtitle{margin-top:6px; color:var(--muted); font-size: clamp(14px, 2.4vw, 18px)}
+
+/* 레이아웃 */
+main{max-width:880px; margin:0 auto; padding:var(--space-lg); display:flex; flex-direction:column; gap:var(--space-lg)}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:var(--space-lg)}
+
+/* 접근성 */
+label, .step-title{font-weight:600; font-size:20px}
+.hint{color:var(--muted); font-size:16px; margin-top:6px}
+.row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+.actions{display:flex; gap:12px; flex-wrap:wrap; margin-top:12px}
+
+button{appearance:none; border:2px solid transparent; background:#0d1230; color:white; padding:14px 18px; border-radius:14px; cursor:pointer; font-size:18px; line-height:1;}
+button.primary{background: linear-gradient(180deg, var(--accent), #3f5cf6); box-shadow: 0 10px 24px rgba(92,121,255,.35)}
+button.ghost{background:transparent; border-color:#32406f}
+button:disabled{opacity:.55; cursor:not-allowed}
+button:focus-visible{outline:4px solid var(--focus)}
+
+input[type="file"]{width:100%; padding:18px; border:2px dashed #334270; background:#0e1532; border-radius:14px; color:#e6ecff; font-size:18px}
+
+textarea{width:100%; min-height:180px; resize:vertical; border-radius:14px; background:#0b1330; border:2px solid #2b3a6a; color:#e9eeff; padding:14px; font-size:16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace}
+
+.grid{display:grid; grid-template-columns: 1fr; gap:12px}
+.pill{display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border:1px solid #2a3a6d; border-radius:999px; font-size:16px; background:#0e1532; color:#dbe3ff}
+
+.preview-wrap{display:grid; grid-template-columns: 1fr; gap:12px}
+canvas, .thumb{width:100%; border-radius:14px; border:2px solid #2b3a6a; background:#0b1330}
+.thumb{height:240px; object-fit:contain; display:none}
+
+.status{font-size:18px; margin-top:6px}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.status.err{color:var(--err)}
+
+.sr-only{position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+.copy-row{display:flex; gap:8px; flex-wrap:wrap}
+.copy-row button{font-size:16px; padding:10px 14px}
+
+details{margin-top:10px}
+summary{cursor:pointer; color:#c9d3ff}
+
+@media (prefers-reduced-motion: no-preference){
+  .fade-in{animation:fade .35s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(2px)} to{opacity:1; transform:none}}
+}
