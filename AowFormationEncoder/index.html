@@ -10,7 +10,10 @@
 <body>
   <header>
     <div class="title" role="heading" aria-level="1">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16v6H4z" stroke="#9fb3ff" stroke-width="1.8"/><path d="M8 15h8m-6 4h4" stroke="#9fb3ff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 5h16v6H4z" stroke="#9fb3ff" stroke-width="1.8"/>
+        <path d="M8 15h8m-6 4h4" stroke="#9fb3ff" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
       <h1>이미지 → 코드 변환</h1>
     </div>
     <div class="subtitle">순서대로 따라만 하세요. <strong>① 이미지 선택 → ② 변환 → ③ 코드 복사</strong> 끝!</div>
@@ -87,6 +90,7 @@
 
   <!-- OpenCV.js (WASM) -->
   <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()" onerror="cvLoadError()"></script>
-  <script src="script.js"></script>
+  <!-- 앱 스크립트 -->
+  <script defer src="script.js"></script>
 </body>
 </html>
