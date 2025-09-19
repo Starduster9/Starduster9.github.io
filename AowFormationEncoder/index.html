@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>이미지 → 코드 변환 (쉬운모드)</title>
+  <title>이미지 → 반죽 변환기</title>
   <meta name="color-scheme" content="dark light">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -14,9 +14,12 @@
         <path d="M4 5h16v6H4z" stroke="#9fb3ff" stroke-width="1.8"/>
         <path d="M8 15h8m-6 4h4" stroke="#9fb3ff" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
-      <h1>이미지 → 코드 변환</h1>
+      <h1>이미지 → 반죽 변환기</h1>
     </div>
-    <div class="subtitle">순서대로 따라만 하세요. <strong>① 이미지 선택 → ② 변환 → ③ 코드 복사</strong> 끝!</div>
+    <div class="subtitle">
+      순서대로 따라만 하세요. <strong>① 이미지 선택 → ② 변환 → ③ 반죽 복사</strong> 끝!
+      <br><span aria-label="제작 크레딧">만든이: Starduster</span>
+    </div>
   </header>
 
   <main>
@@ -32,12 +35,6 @@
         <img id="thumb" class="thumb" alt="미리보기 이미지" />
       </div>
 
-      <div class="row" style="margin-top:10px">
-        <span class="pill">빈칸 RGB: <strong id="emptyRGBView">[246,238,213]</strong></span>
-        <span class="pill">허용오차: <strong id="tolView">±10%</strong></span>
-        <span class="pill">그리드: <strong>7×7</strong></span>
-      </div>
-
       <div id="tplStatus" class="status" aria-live="polite"></div>
     </section>
 
@@ -47,40 +44,40 @@
       <p class="hint">아래 버튼을 누르면 자동으로 분석하고 결과를 만들어 드립니다.</p>
       <div class="actions">
         <button id="runBtn" class="primary" disabled>변환 시작</button>
-        <button id="resetBtn" class="ghost">다시하기</button>
         <span id="status" class="status" aria-live="polite"></span>
       </div>
       <progress id="tplProgress" max="100" value="0" style="width:100%; margin-top:12px"></progress>
-      <div id="tplList" class="hint" style="margin-top:6px">템플릿 로드 대기…</div>
     </section>
 
-    <!-- 3단계: 코드 복사 -->
+    <!-- 3단계: 반죽 복사 -->
     <section class="card fade-in" aria-labelledby="step3">
-      <div class="step-title" id="step3">③ 코드 복사</div>
+      <div class="step-title" id="step3">③ 반죽 복사</div>
       <div class="grid" style="margin-top:8px">
         <div>
-          <label for="jsonOut">JSON 결과</label>
+          <label for="b64Out">반죽</label>
           <div class="copy-row">
-            <button id="copyJson" class="ghost" aria-label="JSON 복사">JSON 복사</button>
-            <button id="dlJsonBtn" class="ghost" disabled>JSON 저장</button>
+            <button id="copyB64" class="ghost" aria-label="반죽 복사">반죽 복사</button>
+            <span id="b64CopiedMark" class="status ok" style="display:none">복사되었습니다!</span>
           </div>
-          <textarea id="jsonOut" readonly aria-label="JSON 결과"></textarea>
-        </div>
-        <div>
-          <label for="b64Out">Base64 결과</label>
-          <div class="copy-row">
-            <button id="copyB64" class="ghost" aria-label="Base64 복사">Base64 복사</button>
-            <button id="dlB64Btn" class="ghost" disabled>Base64 저장</button>
-          </div>
-          <textarea id="b64Out" readonly aria-label="Base64 결과"></textarea>
+          <textarea id="b64Out" readonly aria-label="반죽"></textarea>
         </div>
       </div>
 
       <details>
-        <summary>자세히 보기 (로그/미리보기)</summary>
+        <summary>자세히 보기 (로그/미리보기/JSON)</summary>
         <div class="preview-wrap" style="margin-top:10px">
           <canvas id="canvas" width="800" height="800" aria-label="이미지 처리 미리보기"></canvas>
           <pre id="log" class="hint" style="white-space:pre-wrap"></pre>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <div>
+            <label for="jsonOut">JSON 결과</label>
+            <div class="copy-row">
+              <button id="copyJson" class="ghost" aria-label="JSON 복사">JSON 복사</button>
+              <span id="jsonCopiedMark" class="status ok" style="display:none">복사되었습니다!</span>
+            </div>
+            <textarea id="jsonOut" readonly aria-label="JSON 결과"></textarea>
+          </div>
         </div>
       </details>
     </section>
