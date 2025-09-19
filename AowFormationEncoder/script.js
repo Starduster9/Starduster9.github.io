@@ -8,9 +8,6 @@ const AREA_TOLERANCE = 0.10; // 중앙값 대비 ±10%
 const els = {
   imgInput: document.getElementById('imgInput'),
   runBtn: document.getElementById('runBtn'),
-  resetBtn: document.getElementById('resetBtn'),
-  dlJsonBtn: document.getElementById('dlJsonBtn'),
-  dlB64Btn: document.getElementById('dlB64Btn'),
   copyJson: document.getElementById('copyJson'),
   copyB64: document.getElementById('copyB64'),
   jsonOut: document.getElementById('jsonOut'),
@@ -18,12 +15,11 @@ const els = {
   status: document.getElementById('status'),
   canvas: document.getElementById('canvas'),
   log: document.getElementById('log'),
-  tplList: document.getElementById('tplList'),
   tplProgress: document.getElementById('tplProgress'),
   tplStatus: document.getElementById('tplStatus'),
   thumb: document.getElementById('thumb'),
-  emptyRGBView: document.getElementById('emptyRGBView'),
-  tolView: document.getElementById('tolView')
+  jsonCopiedMark: document.getElementById('jsonCopiedMark'),
+  b64CopiedMark: document.getElementById('b64CopiedMark')
 };
 
 let cvReady = false;
@@ -47,6 +43,12 @@ function setStatus(msg, kind){
 }
 function log(msg){ if(!msg) return; els.log.textContent += `\n${msg}`; }
 
+// 복사 표식 초기화
+function resetCopyIndicators(){
+  if (els.jsonCopiedMark) { els.jsonCopiedMark.style.display = 'none'; }
+  if (els.b64CopiedMark) { els.b64CopiedMark.style.display = 'none'; }
+}
+
 window.onOpenCvReady = function(){
   cv['onRuntimeInitialized'] = async () => {
     cvReady = true;
@@ -64,6 +66,7 @@ window.cvLoadError = function(){
 
 // 파일 → 미리보기 이미지 표시
 els.imgInput.addEventListener('change', async (e)=>{
+  resetCopyIndicators();
   const [file] = e.target.files || [];
   if (!file) return;
   const url = URL.createObjectURL(file);
@@ -79,21 +82,18 @@ els.imgInput.addEventListener('change', async (e)=>{
   }catch(err){ setStatus('이미지 로드 실패: ' + err.message, 'err'); }
 });
 
-els.resetBtn.addEventListener('click', ()=>{
-  els.imgInput.value = '';
-  els.thumb.removeAttribute('src'); els.thumb.style.display='none';
-  els.jsonOut.value = els.b64Out.value = '';
-  els.dlJsonBtn.disabled = els.dlB64Btn.disabled = true;
-  setStatus('초기화 완료');
-});
+els.copyJson?.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'JSON', 'json'));
+els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, '반죽', 'b64'));
 
-els.copyJson.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'JSON'));
-els.copyB64.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, 'Base64'));
-
-function copyToClipboard(text, label){
+function copyToClipboard(text, label, kind){
   if(!text){ setStatus(label + ' 내용이 없습니다', 'warn'); return; }
-  navigator.clipboard.writeText(text).then(()=> setStatus(label + ' 복사 완료', 'ok'))
-    .catch(()=> setStatus('복사 권한이 없습니다. 직접 선택해 복사하세요.', 'warn'));
+  navigator.clipboard.writeText(text).then(()=>{
+    setStatus(label + ' 복사 완료', 'ok');
+    if (kind==='json' && els.jsonCopiedMark) els.jsonCopiedMark.style.display = 'inline';
+    if (kind==='b64' && els.b64CopiedMark) els.b64CopiedMark.style.display = 'inline';
+  }).catch(()=>{
+    setStatus('복사 권한이 없습니다. 직접 선택해 복사하세요.', 'warn');
+  });
 }
 
 function enableRunIfReady(){
@@ -103,24 +103,16 @@ function enableRunIfReady(){
 
 els.runBtn.addEventListener('click', async ()=>{
   try{
+    resetCopyIndicators();
     if (!(srcMat && Object.keys(templates).length)) return;
     setStatus('변환 중… 잠시만요');
     const result = processImage(srcMat);
     const jsonStr = JSON.stringify(result, null, 2);
     els.jsonOut.value = jsonStr;
     els.b64Out.value = btoa(jsonStr);
-    els.dlJsonBtn.disabled = false; els.dlB64Btn.disabled = false;
     setStatus('완료되었습니다 ✅', 'ok');
   }catch(err){ setStatus('실패: ' + err.message, 'err'); console.error(err); }
 });
-
-els.dlJsonBtn.addEventListener('click', ()=> downloadText('payload.json', els.jsonOut.value));
-els.dlB64Btn.addEventListener('click', ()=> downloadText('payload.base64.txt', els.b64Out.value));
-
-function downloadText(name, text){
-  const blob = new Blob([text], {type:'text/plain'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
-}
 
 // ===== 이미지 로딩 보조 =====
 function loadImageFile(file){
@@ -149,8 +141,10 @@ async function preloadTemplates(){
     templates[String(code)] = mat; loaded.push(code);
     if (els.tplProgress){ els.tplProgress.value = loaded.length; }
   }
-  els.tplList.textContent = `로드된 템플릿: ${loaded.join(', ')}`;
-  els.tplStatus.textContent = `템플릿 ${loaded.length}개 로드 완료`;
+  // 자세히 보기(로그)로 이동
+  log(`템플릿 65개 로드 완료`);
+  log(`로드된 템플릿: ${loaded.join(', ')}`);
+  els.tplStatus.textContent = `템플릿 로드 완료`;
   els.tplStatus.className = 'status ok';
 }
 
