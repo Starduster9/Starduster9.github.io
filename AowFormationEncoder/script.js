@@ -46,6 +46,36 @@ function resetCopyIndicators(){
   if (els.b64CopiedMark) els.b64CopiedMark.style.display = 'none';
 }
 
+// ✅ 미리보기/출력/상태를 즉시 초기화 (파일선택 버튼을 누른 순간)
+function clearPreviewUI(){
+  resetCopyIndicators();
+  // 상태 초기화
+  els.status.textContent = '';
+  els.status.className = 'status';
+
+  // 반죽/JSON 필드 초기화
+  if (els.b64Out) els.b64Out.value = '';
+  if (els.jsonOut) els.jsonOut.value = '';
+
+  // 썸네일 숨기기
+  if (els.thumb){
+    els.thumb.removeAttribute('src');
+    els.thumb.style.display = 'none';
+  }
+
+  // 로그 미리보기 영역/캔버스 숨기고 지우기
+  if (els.previewWrap) els.previewWrap.style.display = 'none';
+  if (els.canvas){
+    const ctx = els.canvas.getContext('2d');
+    ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
+  }
+
+  // 기존 이미지 Mat 해제 및 비활성화
+  if (srcMat){ try{ srcMat.delete(); }catch{} }
+  srcMat = null;
+  enableRunIfReady();
+}
+
 // OpenCV 준비
 window.onOpenCvReady = function(){
   cv['onRuntimeInitialized'] = async () => {
@@ -66,21 +96,16 @@ window.cvLoadError = function(){
   els.tplStatus.className='status err';
 };
 
-// 파일 → 미리보기 (비율 유지)
-// 요구사항: 업로드 시 "이미지 준비 완료" 상태문구 제거, 반죽/JSON 초기화, 미리보기 공간 숨김
+// ✅ 파일 선택창을 여는 "순간"에 예전 미리보기 제거
+els.imgInput.addEventListener('click', clearPreviewUI);
+// 키보드로 파일 선택을 여는 경우(Enter/Space)도 대비
+els.imgInput.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' '){ clearPreviewUI(); }
+});
+
+// 파일 선택 완료 시 (비율 유지)
+// 요구사항: 업로드 시 반죽/JSON 초기화는 clearPreviewUI에서 처리됨, 미리보기 공간은 변환 후에만 표시
 els.imgInput.addEventListener('change', async (e)=>{
-  resetCopyIndicators();
-
-  // ✅ 상태 초기화 (2번 변환 옆 "완료되었습니다 ✅" 제거)
-  els.status.textContent = '';
-  els.status.className = 'status';
-
-  // 반죽/JSON 필드 초기화
-  if (els.b64Out) els.b64Out.value = '';
-  if (els.jsonOut) els.jsonOut.value = '';
-  // 미리보기 캔버스 영역 숨기기
-  if (els.previewWrap) els.previewWrap.style.display = 'none';
-
   const [file] = e.target.files || [];
   if (!file) {
     srcMat = null;
@@ -91,8 +116,7 @@ els.imgInput.addEventListener('change', async (e)=>{
   if (els.thumb){ els.thumb.src = url; els.thumb.style.display = 'block'; }
 
   try{
-    if (srcMat){ srcMat.delete(); srcMat=null; }
-    const rgba = await loadImageFile(file);
+    const rgba = await loadImageFile(file); // RGBA Mat (캔버스 비율 유지로 읽음)
     srcMat = new cv.Mat();
     cv.cvtColor(rgba, srcMat, cv.COLOR_RGBA2RGB);
     rgba.delete();
@@ -224,14 +248,14 @@ function processImage(imgRGB){
 function drawGridLabelsVisualization(imgRGB, stats, labels){
   // 원본 복사
   let vis = new cv.Mat(); cv.cvtColor(imgRGB, vis, cv.COLOR_RGB2BGR); // BGR로 그리기
-  // 사각형(파란색) 그리기 — (255,0,0) = 파란색(BGR)
+  // 사각형(파란색) 그리기
   for (const lbl of labels){
     const x = stats.intPtr(lbl, cv.CC_STAT_LEFT)[0];
     const y = stats.intPtr(lbl, cv.CC_STAT_TOP)[0];
     const w = stats.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
     const h = stats.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
     const p1 = new cv.Point(x, y), p2 = new cv.Point(x+w, y+h);
-    cv.rectangle(vis, p1, p2, new cv.Scalar(255, 0, 0), 2);
+    cv.rectangle(vis, p1, p2, new cv.Scalar(0, 0, 255), 2);
   }
   // 캔버스 크기를 Mat 크기에 맞춤(비율 유지)
   els.canvas.width = vis.cols; els.canvas.height = vis.rows;
