@@ -28,8 +28,8 @@ let templates = {};            // { code(string): grayMat }
 let srcMat = null;             // 이미지 Mat (RGB)
 let templatesReady = false;    // 템플릿 전체 로딩 완료 플래그
 
-// 시작 시 로그 미리보기 영역 감추기
-if (els.previewWrap) els.previewWrap.style.display = 'none';
+// 시작 시 캔버스만 감추기 (로그는 보여둠)
+if (els.canvas) els.canvas.style.display = 'none';
 
 // 템플릿 폴더 (troop_images)
 const TEMPLATE_BASE = './troop_images';
@@ -284,8 +284,8 @@ function drawGridLabelsVisualization(imgRGB, stats, labels){
   cv.imshow(els.canvas, visRGB);
   vis.delete(); visRGB.delete();
 
-  // 변환 후에만 미리보기 영역 보이기
-  if (els.previewWrap) els.previewWrap.style.display = 'grid';
+  // 변환 후 캔버스만 보이기 (로그는 원래부터 보임)
+  if (els.canvas) els.canvas.style.display = 'block';
 }
 
 // ===== OpenCV 유틸 =====
