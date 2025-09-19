@@ -20,7 +20,6 @@ header{position:sticky; top:0; z-index:10; backdrop-filter: blur(10px);
 main{max-width:880px; margin:0 auto; padding:var(--space-lg); display:flex; flex-direction:column; gap:var(--space-lg)}
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:var(--space-lg)}
 
-/* 접근성 */
 label, .step-title{font-weight:600; font-size:20px}
 .hint{color:var(--muted); font-size:16px; margin-top:6px}
 .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
@@ -37,6 +36,7 @@ input[type="file"]{width:100%; padding:18px; border:2px dashed #334270; backgrou
 textarea{width:100%; min-height:180px; resize:vertical; border-radius:14px; background:#0b1330; border:2px solid #2b3a6a; color:#e9eeff; padding:14px; font-size:16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace}
 
 .grid{display:grid; grid-template-columns: 1fr; gap:12px}
+
 .pill{display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border:1px solid #2a3a6d; border-radius:999px; font-size:16px; background:#0e1532; color:#dbe3ff}
 
 .preview-wrap{display:grid; grid-template-columns: 1fr; gap:12px}
@@ -49,6 +49,7 @@ canvas, .thumb{width:100%; border-radius:14px; border:2px solid #2b3a6a; backgro
 .status.err{color:var(--err)}
 
 .sr-only{position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+
 .copy-row{display:flex; gap:8px; flex-wrap:wrap}
 .copy-row button{font-size:16px; padding:10px 14px}
 
