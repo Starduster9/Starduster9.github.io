@@ -20,7 +20,7 @@ const els = {
   thumb: document.getElementById('thumb'),
   jsonCopiedMark: document.getElementById('jsonCopiedMark'),
   b64CopiedMark: document.getElementById('b64CopiedMark'),
-  previewWrap: document.querySelector('.preview-wrap') // 로그의 미리보기 영역
+  previewWrap: document.querySelector('.preview-wrap') // 로그의 미리보기/캔버스 영역
 };
 
 let cvReady = false;
@@ -46,33 +46,37 @@ function resetCopyIndicators(){
   if (els.b64CopiedMark) els.b64CopiedMark.style.display = 'none';
 }
 
-// ✅ 미리보기/출력/상태를 즉시 초기화 (파일선택 버튼을 누른 순간)
-function clearPreviewUI(){
+// ✅ 새 파일이 실제로 업로드(선택)된 순간에만 UI 초기화
+//    - 미리보기/캔버스/썸네일/반죽/JSON/복사표식/상태 초기화
+//    - 로그 텍스트(els.log.textContent)는 초기화하지 않음
+function resetUIForNewUpload(){
   resetCopyIndicators();
-  // 상태 초기화
+
+  // 상태 초기화 (2번 옆 문구 제거)
   els.status.textContent = '';
   els.status.className = 'status';
 
-  // 반죽/JSON 필드 초기화
+  // 반죽/JSON 초기화
   if (els.b64Out) els.b64Out.value = '';
   if (els.jsonOut) els.jsonOut.value = '';
 
-  // 썸네일 숨기기
+  // 썸네일 초기화
   if (els.thumb){
     els.thumb.removeAttribute('src');
     els.thumb.style.display = 'none';
   }
 
-  // 로그 미리보기 영역/캔버스 숨기고 지우기
+  // 미리보기 영역 비가시화 + 캔버스 클리어
   if (els.previewWrap) els.previewWrap.style.display = 'none';
   if (els.canvas){
     const ctx = els.canvas.getContext('2d');
     ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
   }
 
-  // 기존 이미지 Mat 해제 및 비활성화
+  // 기존 이미지 Mat 정리
   if (srcMat){ try{ srcMat.delete(); }catch{} }
   srcMat = null;
+
   enableRunIfReady();
 }
 
@@ -96,27 +100,25 @@ window.cvLoadError = function(){
   els.tplStatus.className='status err';
 };
 
-// ✅ 파일 선택창을 여는 "순간"에 예전 미리보기 제거
-els.imgInput.addEventListener('click', clearPreviewUI);
-// 키보드로 파일 선택을 여는 경우(Enter/Space)도 대비
-els.imgInput.addEventListener('keydown', (e)=>{
-  if (e.key === 'Enter' || e.key === ' '){ clearPreviewUI(); }
-});
-
-// 파일 선택 완료 시 (비율 유지)
-// 요구사항: 업로드 시 반죽/JSON 초기화는 clearPreviewUI에서 처리됨, 미리보기 공간은 변환 후에만 표시
+// ❌ (요청에 따라 제거) 파일 선택 버튼 클릭 시 초기화 X
+// ✅ 파일이 실제로 "새로 올라간 순간(change)"에만 초기화
 els.imgInput.addEventListener('change', async (e)=>{
   const [file] = e.target.files || [];
   if (!file) {
-    srcMat = null;
+    // 파일이 선택되지 않으면 아무 것도 하지 않음
     enableRunIfReady();
     return;
   }
+
+  // 새 파일 업로드됨 → UI 초기화 (로그 텍스트는 보존)
+  resetUIForNewUpload();
+
+  // 새 썸네일 표시
   const url = URL.createObjectURL(file);
   if (els.thumb){ els.thumb.src = url; els.thumb.style.display = 'block'; }
 
   try{
-    const rgba = await loadImageFile(file); // RGBA Mat (캔버스 비율 유지로 읽음)
+    const rgba = await loadImageFile(file); // RGBA Mat (비율 유지로 읽음)
     srcMat = new cv.Mat();
     cv.cvtColor(rgba, srcMat, cv.COLOR_RGBA2RGB);
     rgba.delete();
@@ -255,7 +257,7 @@ function drawGridLabelsVisualization(imgRGB, stats, labels){
     const w = stats.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
     const h = stats.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
     const p1 = new cv.Point(x, y), p2 = new cv.Point(x+w, y+h);
-    cv.rectangle(vis, p1, p2, new cv.Scalar(0, 0, 255), 2);
+    cv.rectangle(vis, p1, p2, new cv.Scalar(255, 0, 0), 2);
   }
   // 캔버스 크기를 Mat 크기에 맞춤(비율 유지)
   els.canvas.width = vis.cols; els.canvas.height = vis.rows;
