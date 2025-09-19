@@ -135,7 +135,15 @@ els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, 'b
 
 function copyToClipboard(text, kind){
   if(!text){
-    setStatus((kind==='json'?'JSON':'반죽') + ' 내용이 없습니다', 'warn');
+    if (kind === 'b64' && els.b64CopiedMark){
+      els.b64CopiedMark.textContent = '반죽 내용이 없습니다';
+      els.b64CopiedMark.className = 'status warn';
+      els.b64CopiedMark.style.display = 'inline';
+      // 상단 status는 변경하지 않음
+      return;
+    }
+    // JSON의 경우 기존 동작 유지 (상단 status 경고)
+    setStatus('JSON 내용이 없습니다', 'warn');
     return;
   }
   navigator.clipboard.writeText(text).then(()=>{
