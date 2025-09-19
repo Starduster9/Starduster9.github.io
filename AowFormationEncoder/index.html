@@ -1,450 +1,380 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>이미지 → 코드 (JSON/Base64) 변환</title>
-  <style>
-    :root { --bg:#0b1020; --card:#121a35; --muted:#98a2b3; --acc:#7c9cff; --line:#233055; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, Helvetica, Arial, sans-serif; background:var(--bg); color:#e6eaf2; }
-    header { padding: 24px; border-bottom:1px solid var(--line); backdrop-filter: blur(8px); position: sticky; top:0; background: linear-gradient(180deg, rgba(11,16,32,.9), rgba(11,16,32,.7)); z-index: 10; }
-    h1 { margin:0; font-size: clamp(18px, 2.6vw, 28px); letter-spacing: .3px; }
-    main { padding: 24px; max-width: 1100px; margin: 0 auto; display:grid; gap:20px; grid-template-columns: 1fr 420px; }
-    @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
-    .card { background: var(--card); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .hint { color: var(--muted); font-size: 12px; }
-    label { display:block; font-size:13px; color:#c9d3eb; margin-bottom:8px; }
-    input[type="file"] { width:100%; padding:10px; background:#0e1530; border:1px dashed #2a3a6d; color:#d6e1ff; border-radius:10px; }
-    button { appearance:none; border:1px solid #2a3a6d; background: #0d1230; color:#e6ecff; padding:10px 14px; border-radius:12px; cursor:pointer; transition:.15s ease; }
-    button.primary { border-color: transparent; background: linear-gradient(180deg, #5b79ff, #4863f7); color:white; box-shadow: 0 6px 18px rgba(92, 121, 255, .25); }
-    button:disabled { opacity:.5; cursor:not-allowed; }
-    textarea { width:100%; min-height:160px; resize:vertical; border-radius:12px; background:#0b1330; border:1px solid #25356a; color:#e9eeff; padding:12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
-    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size:12px; color:#d7e1ff; }
-    .pill { display:inline-block; padding:5px 10px; border:1px solid #2a3a6d; border-radius:999px; font-size:12px; color:#c7d2fe; background:#0e1532; }
-    .ok { color:#86efac; }
-    .warn { color:#fde68a; }
-    .err { color:#fda4af; }
-    canvas { width:100%; background:#0b1330; border-radius:12px; border:1px solid #25356a; }
-    .footer { color: var(--muted); font-size: 12px; margin-top:8px; }
-    .small { font-size:12px; color:#b8c2df; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>편성 인코더 (초간단)</title>
+<style>
+  :root { --gap: 14px; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background:#f4f5f7; }
+  .wrap { max-width: 980px; margin: 24px auto; padding: 0 var(--gap); }
+  h1 { font-size: 26px; margin: 0 0 12px; text-align: center; }
+  .card { background:#fff; border-radius:16px; box-shadow: 0 6px 20px rgba(0,0,0,0.06); padding: 20px; margin-bottom: var(--gap); }
+  .row { display: grid; grid-template-columns: 1fr; gap: var(--gap); }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  @media (max-width: 900px){ .grid{ grid-template-columns: 1fr; } }
+  label.block { display:block; font-size:18px; margin-bottom: 6px; }
+  input[type="file"] { font-size:16px; padding:10px; width:100%; background:#fafafa; border:1px solid #e5e7eb; border-radius:10px; }
+  button.big { width:100%; font-size:20px; padding:16px; border:0; border-radius:12px; background:#2563eb; color:#fff; cursor:pointer; }
+  button.big:disabled { background:#9ca3af; cursor:not-allowed; }
+  .help { font-size:15px; color:#4b5563; margin-top:8px; }
+  canvas { width:100%; background:#111; border-radius:12px; }
+  .result { display:flex; flex-direction:column; gap:10px; }
+  textarea { width:100%; min-height:120px; font-size:16px; padding:12px; border:1px solid #e5e7eb; border-radius:12px; resize:vertical; }
+  .row-cols-2 { display:grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  .copy-btn { font-size:16px; padding:10px 12px; border-radius:10px; border:1px solid #d1d5db; background:#f9fafb; cursor:pointer; width: 120px; }
+  .status { font-size:16px; color:#111827; background:#f3f4f6; border-radius:10px; padding:10px 12px; }
+  .ok { color:#065f46; }
+  .bad { color:#991b1b; }
+</style>
 </head>
 <body>
-  <header>
-    <h1>이미지 → 코드(JSON/Base64) 변환 · 서버리스(OpenCV.js)</h1>
-    <div class="small">브라우저 안에서만 실행됩니다 · 파일은 업로드되지 않습니다</div>
-  </header>
+  <div class="wrap">
+    <h1>편성 인코더 (초간단)</h1>
 
-  <main>
-    <section class="card">
-      <div class="grid">
-        <div>
-          <label>1) 템플릿 자동 로드 (호스트 고정 세트)</label>
-<div class="hint">/templates 폴더의 PNG들을 자동으로 불러옵니다 · 파일명=코드(예: <span class="mono">152.png</span>)</div>
-<div id=\"tplList\" class=\"hint\" style=\"margin-top:6px\">로드 대기…</div>
-<div style=\"margin-top:6px\"><progress id=\"tplProgress\" max=\"100\" value=\"0\" style=\"width:100%\"></progress></div>
-        <div>
-          <label>2) 스크린샷 이미지 선택</label>
-          <input id="imgInput" type="file" accept="image/*" />
-          <div class="hint">예상: 7×7 격자 이미지(총 49칸)</div>
+    <div class="card grid">
+      <div>
+        <label class="block">① 스크린샷 선택</label>
+        <input id="imgInput" type="file" accept="image/*" />
+        <div class="help">전투 편성 화면(7×7 격자) 스크린샷을 넣으세요.</div>
+      </div>
+      <div>
+        <label class="block">② 템플릿 폴더 선택</label>
+        <input id="tmplInput" type="file" webkitdirectory directory />
+        <div class="help">숫자이름의 PNG들 (예: <code>152.png</code>) 들어있는 폴더.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button id="runBtn" class="big" disabled>③ 인식 시작</button>
+      <div id="status" class="status" style="margin-top:10px;">이미지와 템플릿을 먼저 선택하세요.</div>
+    </div>
+
+    <div class="card grid">
+      <div>
+        <canvas id="preview" height="600"></canvas>
+        <div class="help">미리보기(좌표 박스 표시)</div>
+      </div>
+      <div class="result">
+        <div class="row-cols-2">
+          <div>
+            <label class="block">JSON 결과</label>
+          </div>
+          <div style="text-align:right">
+            <button class="copy-btn" id="copyJson">복사</button>
+          </div>
         </div>
-      </div>
+        <textarea id="jsonOut" readonly></textarea>
 
-      <div class="row" style="margin-top:12px">
-        <span class="pill">빈칸 RGB: <span class="mono" id="emptyRGBView">[246,238,213]</span></span>
-        <span class="pill">면적 허용오차: <span id="tolView">±10%</span></span>
-        <span class="pill">그리드: 7×7</span>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <button id="runBtn" class="primary" disabled>변환 실행</button>
-        <button id="dlJsonBtn" disabled>JSON 다운로드</button>
-        <button id="dlB64Btn" disabled>Base64 다운로드</button>
-        <span id="status" class="hint"></span>
-      </div>
-
-      <div class="grid" style="margin-top:12px">
-        <div>
-          <label>JSON 결과</label>
-          <textarea id="jsonOut" readonly></textarea>
+        <div class="row-cols-2">
+          <div>
+            <label class="block">BASE64 결과</label>
+          </div>
+          <div style="text-align:right">
+            <button class="copy-btn" id="copyB64">복사</button>
+          </div>
         </div>
-        <div>
-          <label>Base64 결과</label>
-          <textarea id="b64Out" readonly></textarea>
-        </div>
+        <textarea id="b64Out" readonly></textarea>
       </div>
+    </div>
+  </div>
 
-      <div class="footer">참고: Python <span class="mono">capture2code.py</span>의 로직을 OpenCV.js로 포팅한 브라우저 전용 구현입니다.</div>
-    </section>
-
-    <aside class="card">
-      <label>미리보기</label>
-      <canvas id="canvas" width="800" height="800"></canvas>
-      <div id="log" class="hint" style="margin-top:10px; white-space:pre-wrap"></div>
-    </aside>
-  </main>
-
-  <!-- OpenCV.js (WASM) -->
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()" onerror="cvLoadError()"></script>
+  <!-- 같은 폴더에 opencv.js 파일 필요 -->
+  <script src="opencv.js"></script>
   <script>
-    // ==== 구성값 (Python 버전과 동일한 기본값) ====
+    // ====== 설정 ======
     const GRID_SIZE = 7;
     const NUM_CELLS = GRID_SIZE * GRID_SIZE;
-    const TARGET_EMPTY_RGB = [246, 238, 213];
-    const AREA_TOLERANCE = 0.10; // 중앙값 대비 ±10%
+    const AREA_TOL = 0.10;
+    const TARGET_EMPTY_RGB = [246, 238, 213]; // 빈칸색 (R,G,B)
 
-    const els = {
-      imgInput: document.getElementById('imgInput'),
-      runBtn: document.getElementById('runBtn'),
-      dlJsonBtn: document.getElementById('dlJsonBtn'),
-      dlB64Btn: document.getElementById('dlB64Btn'),
-      jsonOut: document.getElementById('jsonOut'),
-      b64Out: document.getElementById('b64Out'),
-      status: document.getElementById('status'),
-      canvas: document.getElementById('canvas'),
-      log: document.getElementById('log'),
-      tplList: document.getElementById('tplList'),
-      tplProgress: document.getElementById('tplProgress')
-    };
+    // ====== DOM ======
+    const imgInput = document.getElementById('imgInput');
+    const tmplInput = document.getElementById('tmplInput');
+    const runBtn = document.getElementById('runBtn');
+    const statusEl = document.getElementById('status');
+    const canvas = document.getElementById('preview');
+    const ctx = canvas.getContext('2d');
+    const jsonOut = document.getElementById('jsonOut');
+    const b64Out = document.getElementById('b64Out');
+    const copyJson = document.getElementById('copyJson');
+    const copyB64 = document.getElementById('copyB64');
 
-    let cvReady = false;
-    let templates = {}; // { code(string): grayMat }
-    let srcMat = null;  // 이미지 Mat (RGB)
+    let userImage = null;      // HTMLImageElement
+    let tmplMats = {};         // { "152": cv.Mat(gray) }
 
-    // 고정 세트 템플릿 설정 — 필요에 맞게 수정
-    const TEMPLATE_BASE = './templates'; // 동일 호스트 정적 경로
-    const TEMPLATE_CODES = [
-      101,102,103,104,105,106,107,109,110,111,112,113,
-      124,125,126,132,133,134,142,143,144,145,146,147,148,149,150,151,
-      159,160,161,162,163,164,166,168,173,178,179,180,181,182,183,186,
-      188,189,191,192,193,198,199,200,201,202,203,210,211,212,213,214,
-      215,216,217,219,220
-    ]; // 예시: 배포 시 실제 코드 목록으로 교체
-
-    function onOpenCvReady() {
-      cv['onRuntimeInitialized'] = async () => {
-        cvReady = true;
-        info('OpenCV.js 로드 완료');
-        try {
-          await preloadTemplates();
-          info('템플릿 로드 완료');
-        } catch(err){ error('템플릿 로드 실패: '+err.message); }
-        enableRunIfReady();
-      };
-    }
-    function cvLoadError(){ error('OpenCV.js 로드 실패'); }
-
-    function info(msg){ els.status.textContent = msg; log(msg); }
-    function warn(msg){ els.status.innerHTML = `<span class=warn>${msg}</span>`; log(msg); }
-    function error(msg){ els.status.innerHTML = `<span class=err>${msg}</span>`; log(msg); }
-    function log(msg){ els.log.textContent += `\n${msg}`; }
-
-    // 파일→Image→Canvas→cv.Mat 로딩
-    function loadImageFile(file){
-      return new Promise((resolve, reject)=>{
-        const img = new Image();
-        img.onload = () => {
-          const ctx = els.canvas.getContext('2d');
-          // 캔버스 정사각 보정
-          const size = Math.min(els.canvas.width, els.canvas.height);
-          ctx.clearRect(0,0,els.canvas.width, els.canvas.height);
-          ctx.drawImage(img, 0, 0, size, size);
-          const mat = cv.imread(els.canvas);
-          resolve(mat);
-        };
-        img.onerror = () => reject(new Error('이미지 로드 실패'));
-        img.src = URL.createObjectURL(file);
-      });
+    function setStatus(msg, ok=false) {
+      statusEl.innerHTML = msg;
+      statusEl.classList.toggle('ok', ok);
+      statusEl.classList.toggle('bad', !ok);
     }
 
-    async function handleTemplates(files){
-      templates = {};
-      for (const f of files){
-        if (!f.name.toLowerCase().endsWith('.png')) continue;
-        const code = f.name.replace(/\.png$/i,'');
-        const mat = await fileToMat(f);
-        let gray = new cv.Mat();
-        cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
-        mat.delete();
-        templates[code] = gray; // 저장
-      }
-      info(`템플릿 ${Object.keys(templates).length}개 로드`);
+    function enableRunIfReady() {
+      runBtn.disabled = !(userImage && Object.keys(tmplMats).length > 0);
+      if (!runBtn.disabled) setStatus('준비 완료! "③ 인식 시작"을 누르세요.', true);
+    }
+
+    // =========== 파일 로드 ===========
+    imgInput.addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      userImage = await fileToImage(f);
+      // 캔버스에 맞게 그리기
+      const ratio = userImage.width / userImage.height;
+      canvas.width = Math.min(900, userImage.width);
+      canvas.height = Math.round(canvas.width / ratio);
+      ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+      setStatus('이미지 로드됨.');
       enableRunIfReady();
-    }
-
-    function fileToMat(file){
-      return new Promise((resolve, reject)=>{
-        const img = new Image();
-        img.onload = ()=>{
-          const c = document.createElement('canvas');
-          c.width = img.width; c.height = img.height;
-          c.getContext('2d').drawImage(img,0,0);
-          const m = cv.imread(c);
-          resolve(m);
-        };
-        img.onerror = ()=>reject(new Error('템플릿 로드 실패'));
-        img.src = URL.createObjectURL(file);
-      });
-    }
-
-    function enableRunIfReady(){
-      const ready = (cvReady && Object.keys(templates).length>0 && srcMat);
-      els.runBtn.disabled = !ready;
-    }
-
-    // 템플릿 파일 입력(a.k.a. 수동 업로드) 제거됨 — 고정 세트 자동 로드 사용
-
-    els.imgInput.addEventListener('change', async (e)=>{
-      try{
-        if (srcMat){ srcMat.delete(); srcMat=null; }
-        const [file] = e.target.files; if(!file){ return; }
-        const bgr = await loadImageFile(file);
-        // RGBA/BGR 통일 → RGB
-        srcMat = new cv.Mat();
-        if (bgr.type() === cv.CV_8UC4){ cv.cvtColor(bgr, srcMat, cv.COLOR_RGBA2RGB); bgr.delete(); }
-        else { cv.cvtColor(bgr, srcMat, cv.COLOR_BGR2RGB); bgr.delete(); }
-        info('스크린샷 로드 완료');
-        enableRunIfReady();
-      }catch(err){ error(err.message); }
     });
 
-    els.runBtn.addEventListener('click', async ()=>{
-      try{
-        if (!(srcMat && Object.keys(templates).length)) return;
-        info('처리 중…');
-        const result = processImage(srcMat);
-        const jsonStr = JSON.stringify(result, null, 2);
-        els.jsonOut.value = jsonStr;
-        els.b64Out.value = btoa(jsonStr);
-        els.dlJsonBtn.disabled = false;
-        els.dlB64Btn.disabled = false;
-        info('완료 ✅');
-      }catch(err){ error('실패: '+err.message); console.error(err); }
-    });
+    tmplInput.addEventListener('change', async (e) => {
+      tmplMats = {};
+      const files = Array.from(e.target.files || []).filter(f => /\.png$/i.test(f.name));
+      if (files.length === 0) { setStatus('템플릿 PNG를 찾지 못했습니다.'); return; }
 
-    els.dlJsonBtn.addEventListener('click', ()=> downloadText('payload.json', els.jsonOut.value));
-    els.dlB64Btn.addEventListener('click', ()=> downloadText('payload.base64.txt', els.b64Out.value));
-
-    function downloadText(name, text){
-      const blob = new Blob([text], {type:'text/plain'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = name; a.click();
-    }
-
-    // 템플릿 자동 로더
-    async function preloadTemplates(){
-      templates = {};
-      const loaded = [];
-      for (const code of TEMPLATE_CODES){
-        const url = `${TEMPLATE_BASE}/${code}.png`;
-        const mat = await urlToGrayMat(url);
-        templates[String(code)] = mat;
-        loaded.push(code);
+      // 순차 로드 (단순/안정)
+      for (const f of files) {
+        const name = f.name.replace(/\.png$/i,'');
+        try {
+          const img = await fileToImage(f);
+          const mat = cv.imread(imgToCanvas(img)); // RGBA
+          const gray = new cv.Mat();
+          cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
+          tmplMats[name] = gray;  // 보관
+          mat.delete();
+        } catch (err) {
+          console.warn('템플릿 로드 실패:', f.name, err);
+        }
       }
-      if (els.tplProgress){ els.tplProgress.max = TEMPLATE_CODES.length; els.tplProgress.value = TEMPLATE_CODES.length; }
-      els.tplList.textContent = `로드된 템플릿: ${loaded.join(', ')}`;
-    }
+      const n = Object.keys(tmplMats).length;
+      if (n === 0) setStatus('유효한 템플릿이 없습니다.');
+      else setStatus(`템플릿 ${n}개 로드됨.`, true);
+      enableRunIfReady();
+    });
 
-    function urlToGrayMat(url){
-      return new Promise((resolve, reject)=>{
+    // =========== 유틸 ===========
+    function fileToImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
         const img = new Image();
-        img.crossOrigin = 'anonymous'; // 동일 도메인이면 무시됨
-        img.onload = ()=>{
-          const c = document.createElement('canvas');
-          c.width = img.width; c.height = img.height;
-          c.getContext('2d').drawImage(img,0,0);
-          const rgba = cv.imread(c);
-          let gray = new cv.Mat();
-          cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
-          rgba.delete();
-          resolve(gray);
-        };
-        img.onerror = ()=>reject(new Error('이미지 로드 실패: '+url));
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = reject;
         img.src = url;
       });
     }
 
-    // ===================== 핵심 처리 파이프라인 =====================
-    function processImage(imgRGB){
-      // 1) 빈칸(배경) 마스크 → 가장 큰 BG 연결요소만 남기고 반전
-      const nonEmptyMask = buildNonEmptyMask(imgRGB, TARGET_EMPTY_RGB);
-
-      // 2) 라벨링
-      const comps = connectedComponents(nonEmptyMask);
-
-      // 3) 49개 격자 성분 선택
-      const gridLabels = selectGridComponents(comps.stats, NUM_CELLS, AREA_TOLERANCE);
-
-      // 4) 병력 매핑 (템플릿 매칭)
-      const troopLayout = buildTroopLayout(imgRGB, comps.stats, comps.centroids, gridLabels, templates);
-
-      // 5) 페이로드 생성
-      return buildPayload(troopLayout, {});
+    function imgToCanvas(img) {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const cctx = c.getContext('2d');
+      cctx.drawImage(img, 0, 0);
+      return c;
     }
 
-    function buildNonEmptyMask(imgRGB, emptyRGB){
-      const src = imgRGB;
-      let mask = new cv.Mat();
-      const lo = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(emptyRGB[0], emptyRGB[1], emptyRGB[2]));
-      const hi = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(emptyRGB[0], emptyRGB[1], emptyRGB[2]));
-      cv.inRange(src, lo, hi, mask); // empty == 255
-      lo.delete(); hi.delete();
-
-      // 가장 큰 BG 연결요소만 유지
-      let labels = new cv.Mat();
-      let stats = new cv.Mat();
-      let centroids = new cv.Mat();
-      cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
-      if (stats.rows <= 1) {
-        // BG 없음 → non-empty = 반전
-        cv.bitwise_not(mask, mask);
-        return mask;
-      }
-      // BG 후보들 중 면적 최대인 라벨 찾기 (0 제외)
-      let maxArea = -1, maxIdx = 1;
-      for (let i=1; i<stats.rows; i++){
-        const area = stats.intPtr(i, cv.CC_STAT_AREA)[0];
-        if (area > maxArea){ maxArea = area; maxIdx = i; }
-      }
-      // 해당 라벨만 255로 만든 후 반전
-      let refinedBG = new cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8U);
-      for (let r=0; r<labels.rows; r++){
-        for (let c=0; c<labels.cols; c++){
-          if (labels.intPtr(r,c)[0] === maxIdx) refinedBG.ucharPtr(r,c)[0] = 255;
-        }
-      }
-      let nonEmpty = new cv.Mat();
-      cv.bitwise_not(refinedBG, nonEmpty);
-      mask.delete(); labels.delete(); stats.delete(); centroids.delete(); refinedBG.delete();
-      return nonEmpty;
-    }
-
-    function connectedComponents(mask){
-      let labels = new cv.Mat();
-      let stats = new cv.Mat();
-      let centroids = new cv.Mat();
-      cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
-      return { labels, stats, centroids };
-    }
-
-    function selectGridComponents(stats, expected, tol){
-      // stats: rows × 5(+)
-      const areas = [];
-      for (let i=1; i<stats.rows; i++){ // 0은 전체 배경
-        areas.push(stats.intPtr(i, cv.CC_STAT_AREA)[0]);
-      }
-      if (areas.length < expected) throw new Error(`성분 부족: ${areas.length} < ${expected}`);
-
-      const med = median(areas);
-      const lo = med * (1 - tol), hi = med * (1 + tol);
-
-      const candidates = [];
-      for (let i=1; i<stats.rows; i++){
-        const area = stats.intPtr(i, cv.CC_STAT_AREA)[0];
-        if (area>=lo && area<=hi) candidates.push({label:i, area});
-      }
-      if (candidates.length < expected){
-        // 면적 내 후보가 부족하면 면적 큰 순서로 보정
-        const all = [];
-        for (let i=1; i<stats.rows; i++) all.push({label:i, area: stats.intPtr(i, cv.CC_STAT_AREA)[0]});
-        all.sort((a,b)=>b.area-a.area);
-        return all.slice(0, expected).map(o=>o.label);
-      }
-      candidates.sort((a,b)=>b.area-a.area);
-      return candidates.slice(0, expected).map(o=>o.label);
-    }
-
-    function sortLabelsRowMajor(stats, centroids, labels){
-      const pts = labels.map(lbl => ({
-        lbl,
-        x: centroids.doublePtr(lbl, 0)[0],
-        y: centroids.doublePtr(lbl, 1)[0]
-      }));
-      const ys = pts.map(p=>p.y);
-      const yMin = Math.min(...ys), yMax = Math.max(...ys);
-      const rowStep = (yMax - yMin + 1e-6) / GRID_SIZE;
-      function rowIndex(y){
-        let r = Math.floor((y - yMin) / rowStep);
-        return Math.min(Math.max(r, 0), GRID_SIZE-1);
-      }
-      pts.sort((a,b)=>{
-        const ra = rowIndex(a.y), rb = rowIndex(b.y);
-        if (ra !== rb) return ra - rb; // row asc
-        return a.x - b.x; // x asc
-      });
-      return pts.map(p=>p.lbl);
-    }
-
-    function extractPatchGray(imgRGB, statRow){
-      const x = statRow.intPtr(0, cv.CC_STAT_LEFT)[0];
-      const y = statRow.intPtr(0, cv.CC_STAT_TOP)[0];
-      const w = statRow.intPtr(0, cv.CC_STAT_WIDTH)[0];
-      const h = statRow.intPtr(0, cv.CC_STAT_HEIGHT)[0];
-      const rect = new cv.Rect(x,y,w,h);
-      const patch = imgRGB.roi(rect);
-      let gray = new cv.Mat();
-      cv.cvtColor(patch, gray, cv.COLOR_RGB2GRAY);
-      patch.delete();
-      const y0 = Math.floor(h*0.20), y1 = Math.floor(h*0.60);
-      const x0 = Math.floor(w*0.10), x1 = Math.floor(w*0.90);
-      const roi = gray.roi(new cv.Rect(x0, y0, Math.max(1,x1-x0), Math.max(1,y1-y0)));
-      gray.delete();
-      return roi; // Mat(roi) 반환 (호출 측에서 delete 필요)
-    }
-
-    function mse(a, b){
-      // a,b: CV_8U 단일채널 동일 크기
-      let diff = new cv.Mat();
+    function mse(a, b) {
+      // a,b: cv.Mat(gray, same size)
+      const diff = new cv.Mat();
       cv.absdiff(a, b, diff);
-      cv.multiply(diff, diff, diff); // square
+      cv.multiply(diff, diff, diff);
       const mean = cv.mean(diff)[0];
       diff.delete();
       return mean;
     }
 
-    function matchTemplateCode(patchGray, templates){
-      const size = patchGray.size();
-      let best = {code:null, score:Infinity};
-      for (const [code, tGray] of Object.entries(templates)){
-        let resized = new cv.Mat();
-        cv.resize(tGray, resized, size, 0, 0, cv.INTER_AREA);
-        const score = mse(patchGray, resized);
-        resized.delete();
-        if (score < best.score){ best = {code, score}; }
+    function toBase64(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    // =========== 핵심 파이프라인 ===========
+    async function run() {
+      try {
+        setStatus('처리 중… 잠시만요.');
+
+        // 1) 입력 이미지 Mat(RGBA -> RGB)
+        const srcRGBA = cv.imread(imgToCanvas(userImage));
+        const src = new cv.Mat();
+        cv.cvtColor(srcRGBA, src, cv.COLOR_RGBA2RGB);
+        srcRGBA.delete();
+
+        // 2) non-empty mask (빈칸 RGB와 정확히 같은 픽셀을 배경으로 간주)
+        const mask = new cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC1);
+        for (let y=0; y<src.rows; y++) {
+          for (let x=0; x<src.cols; x++) {
+            const r = src.ucharPtr(y,x)[0];
+            const g = src.ucharPtr(y,x)[1];
+            const b = src.ucharPtr(y,x)[2];
+            const isBG = (r===TARGET_EMPTY_RGB[0] && g===TARGET_EMPTY_RGB[1] && b===TARGET_EMPTY_RGB[2]);
+            mask.ucharPtr(y,x)[0] = isBG ? 0 : 255;
+          }
+        }
+
+        // 3) 가장 큰 배경성분 제거(배경 마스크 정제)
+        const labels = new cv.Mat(), stats = new cv.Mat(), centroids = new cv.Mat();
+        let num = cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
+        // 배경성분(0 제외) 중 가장 큰 것 찾아서 "배경"으로 간주 → 반전하여 non-empty
+        if (num > 1) {
+          let maxIdx = 1, maxArea = stats.intPtr(1, cv.CC_STAT_AREA)[0];
+          for (let i=2; i<num; i++) {
+            const a = stats.intPtr(i, cv.CC_STAT_AREA)[0];
+            if (a > maxArea) { maxArea = a; maxIdx = i; }
+          }
+          const refinedBG = new cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8UC1);
+          for (let y=0; y<mask.rows; y++) {
+            for (let x=0; x<mask.cols; x++) {
+              refinedBG.ucharPtr(y,x)[0] = (labels.intPtr(y,x)[0] === maxIdx) ? 255 : 0;
+            }
+          }
+          // non-empty = !refinedBG
+          for (let y=0; y<mask.rows; y++) {
+            for (let x=0; x<mask.cols; x++) {
+              mask.ucharPtr(y,x)[0] = refinedBG.ucharPtr(y,x)[0] ? 0 : 255;
+            }
+          }
+          refinedBG.delete();
+        }
+        labels.delete(); stats.delete(); centroids.delete();
+
+        // 4) 최종 마스크로 연결요소
+        const L = new cv.Mat(), S = new cv.Mat(), C = new cv.Mat();
+        num = cv.connectedComponentsWithStats(mask, L, S, C, 4, cv.CV_32S);
+
+        // 5) 격자 성분 선택 (49개 목표)
+        // 5-1 면적 배열
+        let areas = [];
+        for (let i=1; i<num; i++) areas.push(S.intPtr(i, cv.CC_STAT_AREA)[0]);
+        if (areas.length === 0) throw new Error('연결요소가 없습니다.');
+
+        // 면적 중앙값 ± tolerence
+        areas.sort((a,b)=>a-b);
+        const med = areas[Math.floor(areas.length/2)];
+        const lo = med * (1-AREA_TOL), hi = med * (1+AREA_TOL);
+
+        let candidates = [];
+        for (let i=1; i<num; i++) {
+          const a = S.intPtr(i, cv.CC_STAT_AREA)[0];
+          if (a>=lo && a<=hi) candidates.push(i);
+        }
+        if (candidates.length < NUM_CELLS) {
+          // 부족하면 큰 면적부터 채우기
+          const all = Array.from({length:num-1}, (_,k)=>k+1).sort((i,j)=>{
+            return S.intPtr(j, cv.CC_STAT_AREA)[0] - S.intPtr(i, cv.CC_STAT_AREA)[0];
+          });
+          candidates = all.slice(0, Math.min(NUM_CELLS, all.length));
+        } else {
+          // 충분하면 중앙값 근처 중 큰 것부터
+          candidates.sort((i,j)=>{
+            return S.intPtr(j, cv.CC_STAT_AREA)[0] - S.intPtr(i, cv.CC_STAT_AREA)[0];
+          });
+          candidates = candidates.slice(0, NUM_CELLS);
+        }
+        if (candidates.length < NUM_CELLS) {
+          setStatus(`경고: 연결요소가 부족함 (${candidates.length}/${NUM_CELLS}). 가능한 만큼 진행합니다.`, false);
+        } else {
+          setStatus('인식 중…', true);
+        }
+
+        // 6) row-major 정렬
+        const pts = candidates.map(i => {
+          const cx = C.doublePtr(i, 0)[0];
+          const cy = C.doublePtr(i, 1)[0];
+          return {i, cx, cy};
+        });
+        const ys = pts.map(p=>p.cy);
+        const yMin = Math.min(...ys), yMax = Math.max(...ys);
+        const rowStep = (yMax - yMin + 1e-6) / GRID_SIZE;
+        function rowIndex(y){ let r = Math.floor((y - yMin)/rowStep); return Math.max(0, Math.min(GRID_SIZE-1, r)); }
+        pts.sort((a,b)=> (rowIndex(a.cy) - rowIndex(b.cy)) || (a.cx - b.cx));
+        const ordered = pts.map(p=>p.i);
+
+        // 7) 디버그 박스 그리기 (미리보기)
+        // 원본 축소 그리기
+        ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+        function drawRect(x,y,w,h,color="#00E5FF"){
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          const sx = x * (canvas.width/src.cols);
+          const sy = y * (canvas.height/src.rows);
+          const sw = w * (canvas.width/src.cols);
+          const sh = h * (canvas.height/src.rows);
+          ctx.strokeRect(sx, sy, sw, sh);
+        }
+        for (const lbl of ordered) {
+          const x = S.intPtr(lbl, cv.CC_STAT_LEFT)[0];
+          const y = S.intPtr(lbl, cv.CC_STAT_TOP)[0];
+          const w = S.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
+          const h = S.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
+          drawRect(x,y,w,h);
+        }
+
+        // 8) 패치 추출 + 템플릿 매칭
+        const layout = {};
+        for (let idx=0; idx<ordered.length; idx++){
+          const lbl = ordered[idx];
+          const x = S.intPtr(lbl, cv.CC_STAT_LEFT)[0];
+          const y = S.intPtr(lbl, cv.CC_STAT_TOP)[0];
+          const w = S.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
+          const h = S.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
+
+          const roi = src.roi(new cv.Rect(x,y,w,h));
+          const gray = new cv.Mat();
+          cv.cvtColor(roi, gray, cv.COLOR_RGB2GRAY);
+
+          // 내부 관심영역 (H:20~60%, W:10~90%)
+          const y0 = Math.floor(h*0.20), y1=Math.floor(h*0.60);
+          const x0 = Math.floor(w*0.10), x1=Math.floor(w*0.90);
+          const roi2 = gray.roi(new cv.Rect(x0,y0, Math.max(1,x1-x0), Math.max(1,y1-y0)));
+
+          // 템플릿과 MSE로 최솟값 찾기
+          let bestCode = null, bestScore = Number.POSITIVE_INFINITY;
+          const ph = roi2.rows, pw = roi2.cols;
+          for (const [code, tmat] of Object.entries(tmplMats)){
+            const resized = new cv.Mat();
+            cv.resize(tmat, resized, new cv.Size(pw, ph), 0, 0, cv.INTER_AREA);
+            const s = mse(roi2, resized);
+            if (s < bestScore){ bestScore = s; bestCode = code; }
+            resized.delete();
+          }
+          roi2.delete(); gray.delete(); roi.delete();
+
+          const r = Math.floor(idx/GRID_SIZE), c = idx%GRID_SIZE;
+          layout[`${r}${c}`] = parseInt(bestCode ?? '0', 10);
+        }
+
+        // 9) 페이로드 + JSON/BASE64 출력
+        const payload = {
+          GameMode: 0,
+          troopLayout: layout,
+          heroLayout: {},
+          armyLayout: null
+        };
+        const json = JSON.stringify(payload, null, 2);
+        jsonOut.value = json;
+        b64Out.value = toBase64(JSON.stringify(payload));
+
+        setStatus('완료! 결과가 생성되었습니다 ✅', true);
+
+        // 정리
+        src.delete(); mask.delete(); L.delete(); S.delete(); C.delete();
+      } catch (err) {
+        console.error(err);
+        setStatus('오류: ' + (err && err.message ? err.message : err), false);
       }
-      if (!best.code) throw new Error('템플릿 매칭 실패');
-      return best.code;
     }
 
-    function buildTroopLayout(imgRGB, stats, centroids, labels, templates){
-      const ordered = sortLabelsRowMajor(stats, centroids, labels);
-      const layout = {};
-      for (let idx=0; idx<ordered.length; idx++){
-        const lbl = ordered[idx];
-        const r = Math.floor(idx / GRID_SIZE), c = idx % GRID_SIZE;
-        const statRow = stats.row(lbl);
-        const patch = extractPatchGray(imgRGB, statRow);
-        const code = matchTemplateCode(patch, templates);
-        layout[`${r}${c}`] = parseInt(code, 10);
-        patch.delete(); statRow.delete();
-      }
-      return layout;
-    }
+    runBtn.addEventListener('click', run);
 
-    function buildPayload(troopLayout, heroLayout){
-      return {
-        GameMode: 0,
-        troopLayout,
-        heroLayout: heroLayout || {},
-        armyLayout: null,
-      };
-    }
+    copyJson.addEventListener('click', async ()=>{
+      try { await navigator.clipboard.writeText(jsonOut.value); copyJson.textContent='복사됨'; setTimeout(()=>copyJson.textContent='복사',1200); } catch {}
+    });
+    copyB64.addEventListener('click', async ()=>{
+      try { await navigator.clipboard.writeText(b64Out.value); copyB64.textContent='복사됨'; setTimeout(()=>copyB64.textContent='복사',1200); } catch {}
+    });
 
-    // 유틸
-    function median(arr){ const s=[...arr].sort((a,b)=>a-b); const m=(s.length-1)/2; return (s[Math.floor(m)] + s[Math.ceil(m)]) / 2; }
+    // OpenCV 준비되면 안내
+    cv['onRuntimeInitialized'] = () => {
+      setStatus('OpenCV 준비 완료. 이미지/템플릿을 선택하세요.', true);
+    };
   </script>
 </body>
 </html>
