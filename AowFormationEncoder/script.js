@@ -220,12 +220,32 @@ function drawGridLabelsVisualization(imgRGB, stats, labels){
 
 // ===== OpenCV 유틸 =====
 function buildNonEmptyMask(imgRGB, emptyRGB){
-  const src = imgRGB; let mask = new cv.Mat();
-  const lo = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(emptyRGB[0], emptyRGB[1], emptyRGB[2]));
-  const hi = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(emptyRGB[0], emptyRGB[1], emptyRGB[2]));
-  cv.inRange(src, lo, hi, mask); // empty == 255
+  const src = imgRGB;
+
+  // === 기존: cv.inRange(src, lo, hi, mask)
+  // === 변경: 상대 오차 허용 (rtol=1e-2)
+  // 채널별로 |value - ref| <= ref*0.01 조건을 만족하면 배경으로 판단
+  const lo = new cv.Mat(src.rows, src.cols, src.type(),
+    new cv.Scalar(
+      emptyRGB[0] * (1 - 0.01),
+      emptyRGB[1] * (1 - 0.01),
+      emptyRGB[2] * (1 - 0.01)
+    )
+  );
+  const hi = new cv.Mat(src.rows, src.cols, src.type(),
+    new cv.Scalar(
+      emptyRGB[0] * (1 + 0.01),
+      emptyRGB[1] * (1 + 0.01),
+      emptyRGB[2] * (1 + 0.01)
+    )
+  );
+
+  let mask = new cv.Mat();
+  cv.inRange(src, lo, hi, mask); // 배경은 255
+
   lo.delete(); hi.delete();
 
+  // === 이후 로직 동일 (배경 성분 중 가장 큰 것만 취해 refine 후 반전)
   let labels = new cv.Mat(); let stats = new cv.Mat(); let centroids = new cv.Mat();
   cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
   if (stats.rows <= 1) { cv.bitwise_not(mask, mask); return mask; }
@@ -235,14 +255,17 @@ function buildNonEmptyMask(imgRGB, emptyRGB){
     const area = stats.intPtr(i, cv.CC_STAT_AREA)[0];
     if (area > maxArea){ maxArea = area; maxIdx = i; }
   }
+
   let refinedBG = new cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8U);
   for (let r=0; r<labels.rows; r++){
     for (let c=0; c<labels.cols; c++){
       if (labels.intPtr(r,c)[0] === maxIdx) refinedBG.ucharPtr(r,c)[0] = 255;
     }
   }
+
   let nonEmpty = new cv.Mat();
   cv.bitwise_not(refinedBG, nonEmpty);
+
   mask.delete(); labels.delete(); stats.delete(); centroids.delete(); refinedBG.delete();
   return nonEmpty;
 }
