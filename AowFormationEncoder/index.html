@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>이미지 → 반죽 변환기</title>
+  <title>이미지 → 반죽 변환기 (아레나 전용)</title>
   <meta name="color-scheme" content="dark light">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -14,7 +14,7 @@
         <path d="M4 5h16v6H4z" stroke="#9fb3ff" stroke-width="1.8"/>
         <path d="M8 15h8m-6 4h4" stroke="#9fb3ff" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
-      <h1>이미지 → 반죽 변환기</h1>
+      <h1>이미지 → 반죽 변환기 (아레나 전용)</h1>
     </div>
     <div class="subtitle">
       순서대로 따라만 하세요. <strong>① 이미지 선택 → ② 변환 → ③ 반죽 복사</strong> 끝!
@@ -26,7 +26,7 @@
     <!-- 1단계: 이미지 선택 -->
     <section class="card fade-in" aria-labelledby="step1">
       <div class="step-title" id="step1">① 이미지 선택</div>
-      <p class="hint">스크린샷 파일을 올리세요. (예: <span aria-hidden="true">7×7</span> 격자 이미지)</p>
+      <p class="hint">전투 결과 스크린샷 파일을 올리세요. </p>
 
       <div class="grid" style="margin-top:8px">
         <label for="imgInput" class="sr-only">이미지 파일 선택</label>
@@ -64,7 +64,7 @@
       </div>
 
       <details>
-        <summary>자세히 보기 (로그/미리보기/JSON)</summary>
+        <summary>로그 자세히 보기</summary>
         <div class="preview-wrap" style="margin-top:10px">
           <canvas id="canvas" width="800" height="800" aria-label="이미지 처리 미리보기"></canvas>
           <pre id="log" class="hint" style="white-space:pre-wrap"></pre>
