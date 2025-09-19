@@ -70,6 +70,11 @@ window.cvLoadError = function(){
 // 요구사항: 업로드 시 "이미지 준비 완료" 상태문구 제거, 반죽/JSON 초기화, 미리보기 공간 숨김
 els.imgInput.addEventListener('change', async (e)=>{
   resetCopyIndicators();
+
+  // ✅ 상태 초기화 (2번 변환 옆 "완료되었습니다 ✅" 제거)
+  els.status.textContent = '';
+  els.status.className = 'status';
+
   // 반죽/JSON 필드 초기화
   if (els.b64Out) els.b64Out.value = '';
   if (els.jsonOut) els.jsonOut.value = '';
@@ -87,11 +92,11 @@ els.imgInput.addEventListener('change', async (e)=>{
 
   try{
     if (srcMat){ srcMat.delete(); srcMat=null; }
-    const rgba = await loadImageFile(file); // RGBA Mat (캔버스 비율 유지로 읽음)
+    const rgba = await loadImageFile(file);
     srcMat = new cv.Mat();
     cv.cvtColor(rgba, srcMat, cv.COLOR_RGBA2RGB);
     rgba.delete();
-    // 상태표시는 하지 않음 (요구사항)
+    // 상태표시는 하지 않음
     enableRunIfReady();
   }catch(err){
     setStatus('이미지 로드 실패: ' + err.message, 'err');
