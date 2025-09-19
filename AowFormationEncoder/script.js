@@ -1,4 +1,4 @@
-// ==== 구성값 (기존 로직 유지) ====
+// ==== 구성값 ====
 const GRID_SIZE = 7;
 const NUM_CELLS = GRID_SIZE * GRID_SIZE;
 const TARGET_EMPTY_RGB = [246, 238, 213];
@@ -26,27 +26,19 @@ let cvReady = false;
 let templates = {}; // { code(string): grayMat }
 let srcMat = null;  // 이미지 Mat (RGB)
 
-// 고정 세트 템플릿 설정 — 호스트에서 제공
-const TEMPLATE_BASE = './templates';
-const TEMPLATE_CODES = [
-  101,102,103,104,105,106,107,109,110,111,112,113,
-  124,125,126,132,133,134,142,143,144,145,146,147,148,149,150,151,
-  159,160,161,162,163,164,166,168,173,178,179,180,181,182,183,186,
-  188,189,191,192,193,198,199,200,201,202,203,210,211,212,213,214,
-  215,216,217,219,220
-];
+// 템플릿 폴더
+const TEMPLATE_BASE = './troop_images';
 
+// 상태/로그
 function setStatus(msg, kind){
   els.status.textContent = msg || '';
   els.status.className = 'status' + (kind ? ' ' + kind : '');
   log(msg);
 }
 function log(msg){ if(!msg) return; els.log.textContent += `\n${msg}`; }
-
-// 복사 표식 초기화
 function resetCopyIndicators(){
-  if (els.jsonCopiedMark) { els.jsonCopiedMark.style.display = 'none'; }
-  if (els.b64CopiedMark) { els.b64CopiedMark.style.display = 'none'; }
+  if (els.jsonCopiedMark) els.jsonCopiedMark.style.display = 'none';
+  if (els.b64CopiedMark) els.b64CopiedMark.style.display = 'none';
 }
 
 window.onOpenCvReady = function(){
@@ -64,7 +56,7 @@ window.cvLoadError = function(){
   els.tplStatus.className='status err';
 };
 
-// 파일 → 미리보기 이미지 표시
+// 파일 → 미리보기
 els.imgInput.addEventListener('change', async (e)=>{
   resetCopyIndicators();
   const [file] = e.target.files || [];
@@ -82,6 +74,7 @@ els.imgInput.addEventListener('change', async (e)=>{
   }catch(err){ setStatus('이미지 로드 실패: ' + err.message, 'err'); }
 });
 
+// 복사 버튼
 els.copyJson?.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'JSON', 'json'));
 els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, '반죽', 'b64'));
 
@@ -96,11 +89,11 @@ function copyToClipboard(text, label, kind){
   });
 }
 
+// 변환 실행
 function enableRunIfReady(){
   const ready = (cvReady && Object.keys(templates).length>0 && srcMat);
   els.runBtn.disabled = !ready;
 }
-
 els.runBtn.addEventListener('click', async ()=>{
   try{
     resetCopyIndicators();
@@ -114,7 +107,7 @@ els.runBtn.addEventListener('click', async ()=>{
   }catch(err){ setStatus('실패: ' + err.message, 'err'); console.error(err); }
 });
 
-// ===== 이미지 로딩 보조 =====
+// ===== 이미지 로딩 =====
 function loadImageFile(file){
   return new Promise((resolve, reject)=>{
     const img = new Image();
@@ -131,18 +124,26 @@ function loadImageFile(file){
   });
 }
 
-// ===== 템플릿 자동 로더 =====
+// ===== 템플릿 자동 로더 (list.txt 기반) =====
 async function preloadTemplates(){
-  templates = {}; const loaded = [];
-  if (els.tplProgress){ els.tplProgress.max = TEMPLATE_CODES.length; els.tplProgress.value = 0; }
-  for (const code of TEMPLATE_CODES){
+  templates = {};
+  // list.txt 읽기
+  const resp = await fetch(`${TEMPLATE_BASE}/list.txt`);
+  if (!resp.ok) throw new Error('list.txt 불러오기 실패');
+  const txt = await resp.text();
+  const codes = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  if (els.tplProgress){ els.tplProgress.max = codes.length; els.tplProgress.value = 0; }
+  const loaded = [];
+
+  for (const code of codes){
     const url = `${TEMPLATE_BASE}/${code}.png`;
     const mat = await urlToGrayMat(url);
     templates[String(code)] = mat; loaded.push(code);
     if (els.tplProgress){ els.tplProgress.value = loaded.length; }
   }
-  // 자세히 보기(로그)로 이동
-  log(`템플릿 65개 로드 완료`);
+
+  log(`템플릿 ${loaded.length}개 로드 완료`);
   log(`로드된 템플릿: ${loaded.join(', ')}`);
   els.tplStatus.textContent = `템플릿 로드 완료`;
   els.tplStatus.className = 'status ok';
