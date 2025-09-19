@@ -42,8 +42,8 @@ function setStatus(msg, kind){
 }
 function log(msg){ if(!msg) return; els.log.textContent += `\n${msg}`; }
 function resetCopyIndicators(){
-  if (els.jsonCopiedMark) els.jsonCopiedMark.style.display = 'none';
-  if (els.b64CopiedMark) els.b64CopiedMark.style.display = 'none';
+  if (els.jsonCopiedMark) { els.jsonCopiedMark.style.display = 'none'; els.jsonCopiedMark.textContent = '복사되었습니다!'; els.jsonCopiedMark.className = 'status ok'; }
+  if (els.b64CopiedMark) { els.b64CopiedMark.style.display = 'none'; els.b64CopiedMark.textContent = '복사되었습니다!'; els.b64CopiedMark.className = 'status ok'; }
 }
 
 // ✅ 새 파일이 실제로 업로드(선택)된 순간에만 UI 초기화
@@ -100,12 +100,10 @@ window.cvLoadError = function(){
   els.tplStatus.className='status err';
 };
 
-// ❌ (요청에 따라 제거) 파일 선택 버튼 클릭 시 초기화 X
-// ✅ 파일이 실제로 "새로 올라간 순간(change)"에만 초기화
+// 파일이 실제로 "새로 올라간 순간(change)"에만 초기화
 els.imgInput.addEventListener('change', async (e)=>{
   const [file] = e.target.files || [];
   if (!file) {
-    // 파일이 선택되지 않으면 아무 것도 하지 않음
     enableRunIfReady();
     return;
   }
@@ -129,29 +127,40 @@ els.imgInput.addEventListener('change', async (e)=>{
   }
 });
 
-// 복사 버튼: 성공 시 상단 상태 텍스트를 변경하지 않음
-els.copyJson?.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'json'));
-els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, 'b64'));
+// ====== 복사 버튼: 인라인 메시지(버튼 옆)에만 표시 ======
+els.copyJson?.addEventListener('click', ()=> handleCopy('json'));
+els.copyB64?.addEventListener('click', ()=> handleCopy('b64'));
 
-function copyToClipboard(text, kind){
-  if(!text){
-    if (kind === 'b64' && els.b64CopiedMark){
-      els.b64CopiedMark.textContent = '반죽 내용이 없습니다';
-      els.b64CopiedMark.className = 'status warn';
-      els.b64CopiedMark.style.display = 'inline';
-      // 상단 status는 변경하지 않음
-      return;
+function handleCopy(kind){
+  const isJson = (kind === 'json');
+  const text = isJson ? (els.jsonOut?.value || '') : (els.b64Out?.value || '');
+  const mark = isJson ? els.jsonCopiedMark : els.b64CopiedMark;
+
+  // 우선 다른 표시들 리셋
+  resetCopyIndicators();
+
+  if (!text){
+    if (mark){
+      mark.textContent = isJson ? 'JSON 내용이 없습니다' : '반죽 내용이 없습니다';
+      mark.className = 'status warn';
+      mark.style.display = 'inline';
     }
-    // JSON의 경우 기존 동작 유지 (상단 status 경고)
-    setStatus('JSON 내용이 없습니다', 'warn');
     return;
   }
+
   navigator.clipboard.writeText(text).then(()=>{
-    if (kind==='json' && els.jsonCopiedMark) els.jsonCopiedMark.style.display = 'inline';
-    if (kind==='b64' && els.b64CopiedMark) els.b64CopiedMark.style.display = 'inline';
+    if (mark){
+      mark.textContent = '복사되었습니다!';
+      mark.className = 'status ok';
+      mark.style.display = 'inline';
+    }
     // 상단 status는 변경하지 않음
   }).catch(()=>{
-    setStatus('복사 권한이 없습니다. 직접 선택해 복사하세요.', 'warn');
+    if (mark){
+      mark.textContent = '복사 권한이 없습니다. 직접 선택해 복사하세요.';
+      mark.className = 'status warn';
+      mark.style.display = 'inline';
+    }
   });
 }
 
@@ -265,7 +274,7 @@ function drawGridLabelsVisualization(imgRGB, stats, labels){
     const w = stats.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
     const h = stats.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
     const p1 = new cv.Point(x, y), p2 = new cv.Point(x+w, y+h);
-    cv.rectangle(vis, p1, p2, new cv.Scalar(255, 0, 0), 2);
+    cv.rectangle(vis, p1, p2, new cv.Scalar(0, 0, 255), 1);
   }
   // 캔버스 크기를 Mat 크기에 맞춤(비율 유지)
   els.canvas.width = vis.cols; els.canvas.height = vis.rows;
