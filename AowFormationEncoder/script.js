@@ -19,13 +19,17 @@ const els = {
   tplStatus: document.getElementById('tplStatus'),
   thumb: document.getElementById('thumb'),
   jsonCopiedMark: document.getElementById('jsonCopiedMark'),
-  b64CopiedMark: document.getElementById('b64CopiedMark')
+  b64CopiedMark: document.getElementById('b64CopiedMark'),
+  previewWrap: document.querySelector('.preview-wrap') // 로그의 미리보기 영역
 };
 
 let cvReady = false;
 let templates = {};            // { code(string): grayMat }
 let srcMat = null;             // 이미지 Mat (RGB)
-let templatesReady = false;    // ✅ 템플릿 전체 로딩 완료 플래그
+let templatesReady = false;    // 템플릿 전체 로딩 완료 플래그
+
+// 시작 시 로그 미리보기 영역 감추기
+if (els.previewWrap) els.previewWrap.style.display = 'none';
 
 // 템플릿 폴더 (troop_images)
 const TEMPLATE_BASE = './troop_images';
@@ -49,7 +53,7 @@ window.onOpenCvReady = function(){
     els.tplStatus.textContent = 'OpenCV 준비 완료';
     els.tplStatus.className = 'status ok';
     try{
-      await preloadTemplates();  // ✅ 템플릿 먼저 끝까지 로드
+      await preloadTemplates();  // 템플릿 먼저 끝까지 로드
     }catch(err){
       els.tplStatus.textContent = '템플릿 로드 실패: ' + err.message;
       els.tplStatus.className = 'status err';
@@ -63,24 +67,38 @@ window.cvLoadError = function(){
 };
 
 // 파일 → 미리보기 (비율 유지)
+// 요구사항: 업로드 시 "이미지 준비 완료" 상태문구 제거, 반죽/JSON 초기화, 미리보기 공간 숨김
 els.imgInput.addEventListener('change', async (e)=>{
   resetCopyIndicators();
+  // 반죽/JSON 필드 초기화
+  if (els.b64Out) els.b64Out.value = '';
+  if (els.jsonOut) els.jsonOut.value = '';
+  // 미리보기 캔버스 영역 숨기기
+  if (els.previewWrap) els.previewWrap.style.display = 'none';
+
   const [file] = e.target.files || [];
-  if (!file) return;
+  if (!file) {
+    srcMat = null;
+    enableRunIfReady();
+    return;
+  }
   const url = URL.createObjectURL(file);
-  els.thumb.src = url; els.thumb.style.display = 'block';
+  if (els.thumb){ els.thumb.src = url; els.thumb.style.display = 'block'; }
+
   try{
     if (srcMat){ srcMat.delete(); srcMat=null; }
     const rgba = await loadImageFile(file); // RGBA Mat (캔버스 비율 유지로 읽음)
     srcMat = new cv.Mat();
     cv.cvtColor(rgba, srcMat, cv.COLOR_RGBA2RGB);
     rgba.delete();
-    setStatus('이미지 준비 완료', 'ok');
+    // 상태표시는 하지 않음 (요구사항)
     enableRunIfReady();
-  }catch(err){ setStatus('이미지 로드 실패: ' + err.message, 'err'); }
+  }catch(err){
+    setStatus('이미지 로드 실패: ' + err.message, 'err');
+  }
 });
 
-// 복사 버튼: 성공 시 상단 상태 텍스트를 변경하지 않음(요구사항)
+// 복사 버튼: 성공 시 상단 상태 텍스트를 변경하지 않음
 els.copyJson?.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'json'));
 els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, 'b64'));
 
@@ -112,8 +130,8 @@ els.runBtn.addEventListener('click', async ()=>{
     const { result, comps, gridLabels } = processImage(srcMat);
     // 결과 출력
     const jsonStr = JSON.stringify(result, null, 2);
-    els.jsonOut.value = jsonStr;
-    els.b64Out.value = btoa(jsonStr);
+    if (els.jsonOut) els.jsonOut.value = jsonStr;
+    if (els.b64Out) els.b64Out.value = btoa(jsonStr);
     // 그리드 라벨 시각화 (로그 이미지)
     drawGridLabelsVisualization(srcMat, comps.stats, gridLabels);
     setStatus('완료되었습니다 ✅', 'ok');
@@ -132,7 +150,8 @@ function loadImageFile(file){
       } else {
         if (h > max){ w = Math.round(w * (max / h)); h = max; }
       }
-      els.canvas.width = w; els.canvas.height = h; // 미리보기 캔버스도 비율 맞춤
+      // 미리보기 캔버스 크기만 맞춰두고, 실제 그리기는 변환 후 진행
+      els.canvas.width = w; els.canvas.height = h;
       const off = document.createElement('canvas'); off.width = w; off.height = h;
       off.getContext('2d').drawImage(img, 0, 0, w, h);
       const mat = cv.imread(off); // RGBA
@@ -167,7 +186,7 @@ async function preloadTemplates(){
   els.tplStatus.textContent = `템플릿 로드 완료`;
   els.tplStatus.className = 'status ok';
 
-  templatesReady = true;  // ✅ 전체 로딩 완료
+  templatesReady = true;  // 전체 로딩 완료
   enableRunIfReady();
 }
 
@@ -200,14 +219,14 @@ function processImage(imgRGB){
 function drawGridLabelsVisualization(imgRGB, stats, labels){
   // 원본 복사
   let vis = new cv.Mat(); cv.cvtColor(imgRGB, vis, cv.COLOR_RGB2BGR); // BGR로 그리기
-  // 사각형(파란색) 그리기 — 의사코드: (255,0,0) = 파란색(BGR)
+  // 사각형(파란색) 그리기 — (255,0,0) = 파란색(BGR)
   for (const lbl of labels){
     const x = stats.intPtr(lbl, cv.CC_STAT_LEFT)[0];
     const y = stats.intPtr(lbl, cv.CC_STAT_TOP)[0];
     const w = stats.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
     const h = stats.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
     const p1 = new cv.Point(x, y), p2 = new cv.Point(x+w, y+h);
-    cv.rectangle(vis, p1, p2, new cv.Scalar(255, 0, 0), 2); // BGR
+    cv.rectangle(vis, p1, p2, new cv.Scalar(255, 0, 0), 2);
   }
   // 캔버스 크기를 Mat 크기에 맞춤(비율 유지)
   els.canvas.width = vis.cols; els.canvas.height = vis.rows;
@@ -216,15 +235,16 @@ function drawGridLabelsVisualization(imgRGB, stats, labels){
   cv.cvtColor(vis, visRGB, cv.COLOR_BGR2RGB);
   cv.imshow(els.canvas, visRGB);
   vis.delete(); visRGB.delete();
+
+  // 변환 후에만 미리보기 영역 보이기
+  if (els.previewWrap) els.previewWrap.style.display = 'grid';
 }
 
 // ===== OpenCV 유틸 =====
 function buildNonEmptyMask(imgRGB, emptyRGB){
   const src = imgRGB;
 
-  // === 기존: cv.inRange(src, lo, hi, mask)
-  // === 변경: 상대 오차 허용 (rtol=1e-2)
-  // 채널별로 |value - ref| <= ref*0.01 조건을 만족하면 배경으로 판단
+  // 상대 오차 허용 (rtol=1e-2) 영역 설정
   const lo = new cv.Mat(src.rows, src.cols, src.type(),
     new cv.Scalar(
       emptyRGB[0] * (1 - 0.01),
@@ -245,7 +265,6 @@ function buildNonEmptyMask(imgRGB, emptyRGB){
 
   lo.delete(); hi.delete();
 
-  // === 이후 로직 동일 (배경 성분 중 가장 큰 것만 취해 refine 후 반전)
   let labels = new cv.Mat(); let stats = new cv.Mat(); let centroids = new cv.Mat();
   cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
   if (stats.rows <= 1) { cv.bitwise_not(mask, mask); return mask; }
@@ -255,17 +274,14 @@ function buildNonEmptyMask(imgRGB, emptyRGB){
     const area = stats.intPtr(i, cv.CC_STAT_AREA)[0];
     if (area > maxArea){ maxArea = area; maxIdx = i; }
   }
-
   let refinedBG = new cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8U);
   for (let r=0; r<labels.rows; r++){
     for (let c=0; c<labels.cols; c++){
       if (labels.intPtr(r,c)[0] === maxIdx) refinedBG.ucharPtr(r,c)[0] = 255;
     }
   }
-
   let nonEmpty = new cv.Mat();
   cv.bitwise_not(refinedBG, nonEmpty);
-
   mask.delete(); labels.delete(); stats.delete(); centroids.delete(); refinedBG.delete();
   return nonEmpty;
 }
@@ -274,6 +290,7 @@ function connectedComponents(mask){
   cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
   return { labels, stats, centroids };
 }
+// 연속 일관성 기반 선택 로직
 function selectGridComponents(stats, expected, tol){
   const troopLabels = [];
   let areaPrev = 0, wPrev = 0, hPrev = 0;
@@ -305,7 +322,6 @@ function selectGridComponents(stats, expected, tol){
 
   return troopLabels;
 }
-
 function sortLabelsRowMajor(stats, centroids, labels){
   const pts = labels.map(lbl => ({
     lbl,
