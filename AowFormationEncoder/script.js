@@ -278,30 +278,34 @@ function selectGridComponents(stats, expected, tol){
   const troopLabels = [];
   let areaPrev = 0, wPrev = 0, hPrev = 0;
 
-  for (let i = 1; i < stats.rows; i++) { // 0은 배경
+  for (let i = 1; i < stats.rows; i++){ // 0 = background
     const area = stats.intPtr(i, cv.CC_STAT_AREA)[0];
     const w = stats.intPtr(i, cv.CC_STAT_WIDTH)[0];
     const h = stats.intPtr(i, cv.CC_STAT_HEIGHT)[0];
 
-    const areaOk = (areaPrev > 0) && (area > areaPrev * (1 - tol)) && (area < areaPrev * (1 + tol));
-    const wOk    = (wPrev    > 0) && (w    > wPrev    * (1 - tol)) && (w    < wPrev    * (1 + tol));
-    const hOk    = (hPrev    > 0) && (h    > hPrev    * (1 - tol)) && (h    < hPrev    * (1 + tol));
+    if (area < 100) continue;
 
-    if (!(areaOk || wOk || hOk)) {
-      // 새 시퀀스 시작
-      troopLabels.length = 0;
+    if ((areaPrev * (1 - tol) < area && area < areaPrev * (1 + tol)) &&
+        (wPrev * (1 - tol) < w && w < wPrev * (1 + tol)) &&
+        (hPrev * (1 - tol) < h && h < hPrev * (1 + tol))) {
       troopLabels.push(i);
-      areaPrev = area; wPrev = w; hPrev = h;
     } else {
-      // 동일 군으로 이어붙이기
+      troopLabels.length = 0; // reset
       troopLabels.push(i);
     }
 
-    if (troopLabels.length === expected) break;
+    areaPrev = area;
+    wPrev = w;
+    hPrev = h;
+
+    if (troopLabels.length === expected) {
+      break;
+    }
   }
 
   return troopLabels;
 }
+
 function sortLabelsRowMajor(stats, centroids, labels){
   const pts = labels.map(lbl => ({
     lbl,
