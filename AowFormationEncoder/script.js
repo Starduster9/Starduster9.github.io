@@ -26,14 +26,14 @@ let cvReady = false;
 let templates = {}; // { code(string): grayMat }
 let srcMat = null;  // 이미지 Mat (RGB)
 
-// 템플릿 폴더
+// 템플릿 폴더 (변경됨)
 const TEMPLATE_BASE = './troop_images';
 
 // 상태/로그
 function setStatus(msg, kind){
   els.status.textContent = msg || '';
   els.status.className = 'status' + (kind ? ' ' + kind : '');
-  log(msg);
+  if (msg) log(msg);
 }
 function log(msg){ if(!msg) return; els.log.textContent += `\n${msg}`; }
 function resetCopyIndicators(){
@@ -56,7 +56,7 @@ window.cvLoadError = function(){
   els.tplStatus.className='status err';
 };
 
-// 파일 → 미리보기
+// 파일 → 미리보기 (비율 유지)
 els.imgInput.addEventListener('change', async (e)=>{
   resetCopyIndicators();
   const [file] = e.target.files || [];
@@ -65,25 +65,25 @@ els.imgInput.addEventListener('change', async (e)=>{
   els.thumb.src = url; els.thumb.style.display = 'block';
   try{
     if (srcMat){ srcMat.delete(); srcMat=null; }
-    const bgr = await loadImageFile(file);
+    const rgba = await loadImageFile(file); // RGBA Mat (캔버스 비율 유지로 읽음)
     srcMat = new cv.Mat();
-    if (bgr.type() === cv.CV_8UC4){ cv.cvtColor(bgr, srcMat, cv.COLOR_RGBA2RGB); bgr.delete(); }
-    else { cv.cvtColor(bgr, srcMat, cv.COLOR_BGR2RGB); bgr.delete(); }
+    cv.cvtColor(rgba, srcMat, cv.COLOR_RGBA2RGB);
+    rgba.delete();
     setStatus('이미지 준비 완료', 'ok');
     enableRunIfReady();
   }catch(err){ setStatus('이미지 로드 실패: ' + err.message, 'err'); }
 });
 
-// 복사 버튼
-els.copyJson?.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'JSON', 'json'));
-els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, '반죽', 'b64'));
+// 복사 버튼: 성공 시 상단 상태 텍스트를 변경하지 않음(요구사항)
+els.copyJson?.addEventListener('click', ()=> copyToClipboard(els.jsonOut.value, 'json'));
+els.copyB64?.addEventListener('click', ()=> copyToClipboard(els.b64Out.value, 'b64'));
 
-function copyToClipboard(text, label, kind){
-  if(!text){ setStatus(label + ' 내용이 없습니다', 'warn'); return; }
+function copyToClipboard(text, kind){
+  if(!text){ setStatus((kind==='json'?'JSON':'반죽') + ' 내용이 없습니다', 'warn'); return; }
   navigator.clipboard.writeText(text).then(()=>{
-    setStatus(label + ' 복사 완료', 'ok');
     if (kind==='json' && els.jsonCopiedMark) els.jsonCopiedMark.style.display = 'inline';
     if (kind==='b64' && els.b64CopiedMark) els.b64CopiedMark.style.display = 'inline';
+    // 상단 status는 변경하지 않음
   }).catch(()=>{
     setStatus('복사 권한이 없습니다. 직접 선택해 복사하세요.', 'warn');
   });
@@ -99,24 +99,34 @@ els.runBtn.addEventListener('click', async ()=>{
     resetCopyIndicators();
     if (!(srcMat && Object.keys(templates).length)) return;
     setStatus('변환 중… 잠시만요');
-    const result = processImage(srcMat);
+    // 처리 + 시각화
+    const { result, comps, gridLabels } = processImage(srcMat);
+    // 결과 출력
     const jsonStr = JSON.stringify(result, null, 2);
     els.jsonOut.value = jsonStr;
     els.b64Out.value = btoa(jsonStr);
+    // 그리드 라벨 시각화 (로그 이미지)
+    drawGridLabelsVisualization(srcMat, comps.stats, gridLabels);
     setStatus('완료되었습니다 ✅', 'ok');
   }catch(err){ setStatus('실패: ' + err.message, 'err'); console.error(err); }
 });
 
-// ===== 이미지 로딩 =====
+// ===== 이미지 로딩 (비율 유지, 최대 변 한 변 800) =====
 function loadImageFile(file){
   return new Promise((resolve, reject)=>{
     const img = new Image();
     img.onload = () => {
-      const ctx = els.canvas.getContext('2d');
-      const size = Math.min(els.canvas.width, els.canvas.height);
-      ctx.clearRect(0,0,els.canvas.width, els.canvas.height);
-      ctx.drawImage(img, 0, 0, size, size);
-      const mat = cv.imread(els.canvas);
+      const max = 800;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w >= h){
+        if (w > max){ h = Math.round(h * (max / w)); w = max; }
+      } else {
+        if (h > max){ w = Math.round(w * (max / h)); h = max; }
+      }
+      els.canvas.width = w; els.canvas.height = h; // 미리보기 캔버스도 비율 맞춤
+      const off = document.createElement('canvas'); off.width = w; off.height = h;
+      off.getContext('2d').drawImage(img, 0, 0, w, h);
+      const mat = cv.imread(off); // RGBA
       resolve(mat);
     };
     img.onerror = () => reject(new Error('이미지 로드 실패'));
@@ -127,7 +137,6 @@ function loadImageFile(file){
 // ===== 템플릿 자동 로더 (list.txt 기반) =====
 async function preloadTemplates(){
   templates = {};
-  // list.txt 읽기
   const resp = await fetch(`${TEMPLATE_BASE}/list.txt`);
   if (!resp.ok) throw new Error('list.txt 불러오기 실패');
   const txt = await resp.text();
@@ -164,15 +173,39 @@ function urlToGrayMat(url){
   });
 }
 
-// ===================== 핵심 처리 파이프라인 (원본 기능 유지) =====================
+// ===================== 핵심 처리 파이프라인 =====================
 function processImage(imgRGB){
   const nonEmptyMask = buildNonEmptyMask(imgRGB, TARGET_EMPTY_RGB);
   const comps = connectedComponents(nonEmptyMask);
   const gridLabels = selectGridComponents(comps.stats, NUM_CELLS, AREA_TOLERANCE);
   const troopLayout = buildTroopLayout(imgRGB, comps.stats, comps.centroids, gridLabels, templates);
-  return buildPayload(troopLayout, {});
+  const result = buildPayload(troopLayout, {});
+  return { result, comps, gridLabels };
 }
 
+// ====== 로그용 시각화 (의사코드 구현, 비율 유지) ======
+function drawGridLabelsVisualization(imgRGB, stats, labels){
+  // 원본 복사
+  let vis = new cv.Mat(); cv.cvtColor(imgRGB, vis, cv.COLOR_RGB2BGR); // BGR로 그리기
+  // 사각형(파란색) 그리기 — 의사코드: (255,0,0) = 파란색(BGR)
+  for (const lbl of labels){
+    const x = stats.intPtr(lbl, cv.CC_STAT_LEFT)[0];
+    const y = stats.intPtr(lbl, cv.CC_STAT_TOP)[0];
+    const w = stats.intPtr(lbl, cv.CC_STAT_WIDTH)[0];
+    const h = stats.intPtr(lbl, cv.CC_STAT_HEIGHT)[0];
+    const p1 = new cv.Point(x, y), p2 = new cv.Point(x+w, y+h);
+    cv.rectangle(vis, p1, p2, new cv.Scalar(255, 0, 0), 2); // BGR
+  }
+  // 캔버스 크기를 Mat 크기에 맞춤(비율 유지)
+  els.canvas.width = vis.cols; els.canvas.height = vis.rows;
+  // 표시 전에 다시 RGB로 변환해서 자연스러운 색 출력
+  let visRGB = new cv.Mat();
+  cv.cvtColor(vis, visRGB, cv.COLOR_BGR2RGB);
+  cv.imshow(els.canvas, visRGB);
+  vis.delete(); visRGB.delete();
+}
+
+// ===== OpenCV 유틸 =====
 function buildNonEmptyMask(imgRGB, emptyRGB){
   const src = imgRGB; let mask = new cv.Mat();
   const lo = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(emptyRGB[0], emptyRGB[1], emptyRGB[2]));
@@ -200,13 +233,11 @@ function buildNonEmptyMask(imgRGB, emptyRGB){
   mask.delete(); labels.delete(); stats.delete(); centroids.delete(); refinedBG.delete();
   return nonEmpty;
 }
-
 function connectedComponents(mask){
   let labels = new cv.Mat(); let stats = new cv.Mat(); let centroids = new cv.Mat();
   cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
   return { labels, stats, centroids };
 }
-
 function selectGridComponents(stats, expected, tol){
   const areas = []; for (let i=1; i<stats.rows; i++){ areas.push(stats.intPtr(i, cv.CC_STAT_AREA)[0]); }
   if (areas.length < expected) throw new Error(`성분 부족: ${areas.length} < ${expected}`);
@@ -222,7 +253,6 @@ function selectGridComponents(stats, expected, tol){
   }
   candidates.sort((a,b)=>b.area-a.area); return candidates.slice(0, expected).map(o=>o.label);
 }
-
 function sortLabelsRowMajor(stats, centroids, labels){
   const pts = labels.map(lbl => ({
     lbl,
@@ -235,7 +265,6 @@ function sortLabelsRowMajor(stats, centroids, labels){
   pts.sort((a,b)=>{ const ra = rowIndex(a.y), rb = rowIndex(b.y); if (ra !== rb) return ra - rb; return a.x - b.x; });
   return pts.map(p=>p.lbl);
 }
-
 function extractPatchGray(imgRGB, statRow){
   const x = statRow.intPtr(0, cv.CC_STAT_LEFT)[0];
   const y = statRow.intPtr(0, cv.CC_STAT_TOP)[0];
@@ -248,9 +277,7 @@ function extractPatchGray(imgRGB, statRow){
   const roi = gray.roi(new cv.Rect(x0, y0, Math.max(1,x1-x0), Math.max(1,y1-y0)));
   gray.delete(); return roi;
 }
-
 function mse(a, b){ let diff = new cv.Mat(); cv.absdiff(a, b, diff); cv.multiply(diff, diff, diff); const mean = cv.mean(diff)[0]; diff.delete(); return mean; }
-
 function matchTemplateCode(patchGray, templates){
   const size = patchGray.size(); let best = {code:null, score:Infinity};
   for (const [code, tGray] of Object.entries(templates)){
@@ -261,7 +288,6 @@ function matchTemplateCode(patchGray, templates){
   if (!best.code) throw new Error('템플릿 매칭 실패');
   return best.code;
 }
-
 function buildTroopLayout(imgRGB, stats, centroids, labels, templates){
   const ordered = sortLabelsRowMajor(stats, centroids, labels); const layout = {};
   for (let idx=0; idx<ordered.length; idx++){
@@ -271,9 +297,7 @@ function buildTroopLayout(imgRGB, stats, centroids, labels, templates){
   }
   return layout;
 }
-
 function buildPayload(troopLayout, heroLayout){
   return { GameMode: 0, troopLayout, heroLayout: heroLayout || {}, armyLayout: null };
 }
-
 function median(arr){ const s=[...arr].sort((a,b)=>a-b); const m=(s.length-1)/2; return (s[Math.floor(m)] + s[Math.ceil(m)]) / 2; }
