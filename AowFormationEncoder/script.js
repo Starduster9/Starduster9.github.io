@@ -67,8 +67,8 @@ function resetUIForNewUpload(){
   }
 
   // 미리보기 영역 비가시화 + 캔버스 클리어
-  if (els.previewWrap) els.previewWrap.style.display = 'none';
   if (els.canvas){
+    els.canvas.style.display = 'none';
     const ctx = els.canvas.getContext('2d');
     ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
   }
