@@ -295,16 +295,16 @@ function buildNonEmptyMask(imgRGB, emptyRGB){
   // 상대 오차 허용 (rtol=1e-2) 영역 설정
   const lo = new cv.Mat(src.rows, src.cols, src.type(),
     new cv.Scalar(
-      emptyRGB[0] * (1 - 0.01),
-      emptyRGB[1] * (1 - 0.01),
-      emptyRGB[2] * (1 - 0.01)
+      emptyRGB[0] * (1 - 0.02),
+      emptyRGB[1] * (1 - 0.02),
+      emptyRGB[2] * (1 - 0.02)
     )
   );
   const hi = new cv.Mat(src.rows, src.cols, src.type(),
     new cv.Scalar(
-      emptyRGB[0] * (1 + 0.01),
-      emptyRGB[1] * (1 + 0.01),
-      emptyRGB[2] * (1 + 0.01)
+      emptyRGB[0] * (1 + 0.02),
+      emptyRGB[1] * (1 + 0.02),
+      emptyRGB[2] * (1 + 0.02)
     )
   );
 
