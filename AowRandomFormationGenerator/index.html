@@ -160,4 +160,96 @@
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
     function generateRandomLayout(heroIds, troopIds) {
-      // 0~6, 10~16, ... , 60~
+      // 0~6, 10~16, ... , 60~66 (총 49칸)
+      const troopPositions = [];
+      for (let tens = 0; tens < 70; tens += 10) {
+        for (let i = 0; i < 7; i++) troopPositions.push(tens + i);
+      }
+
+      // troopLayout 생성 (empty는 건너뜀)
+      const troopLayout = {};
+      for (const pos of troopPositions) {
+        const troopId = pick([...troopIds, null]);
+        if (troopId !== null) {
+          troopLayout[String(pos)] = troopId;
+        }
+      }
+
+      // heroLayout 생성 (0~2 중 하나의 위치에만 배치)
+      const heroLayout = {};
+      if (heroIds && heroIds.length) {
+        const pos = pick([0, 1, 2]);
+        heroLayout[String(pos)] = pick(heroIds);
+      }
+
+      const layout = {
+        GameMode: 0,
+        troopLayout,
+        heroLayout,
+        armyLayout: null,
+      };
+
+      // JSON → Base64 (UTF-8 안전)
+      const jsonStr = JSON.stringify(layout);
+      const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+      return { base64, layout };
+    }
+
+    // ===== UI 로직 =====
+    const $out = document.getElementById('output');
+    const $len = document.getElementById('len');
+    const $preview = document.getElementById('preview');
+    const $heroCount = document.getElementById('heroCount');
+    const $toaster = document.getElementById('toaster');
+
+    function toast(msg) {
+      const node = document.createElement('div');
+      node.className = 'toast';
+      node.textContent = msg;
+      $toaster.appendChild(node);
+      setTimeout(() => node.remove(), 2000);
+    }
+
+    function render(base64, layout) {
+      $out.value = base64;
+      if ($len) $len.textContent = base64.length.toLocaleString();
+      if ($heroCount) $heroCount.textContent = Object.keys(layout.heroLayout || {}).length;
+      $preview.textContent = JSON.stringify(layout, null, 2);
+      $out.focus();
+      $out.select();
+    }
+
+    async function copyText(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); ta.remove();
+        }
+        toast('클립보드에 복사했어요 ✅');
+      } catch (e) {
+        toast('복사에 실패했어요 ❌');
+      }
+    }
+
+    document.getElementById('btn-generate').addEventListener('click', () => {
+      const { base64, layout } = generateRandomLayout(HERO_LEGEND_IDS, TROOP_IDS);
+      render(base64, layout);
+    });
+
+    document.getElementById('btn-copy').addEventListener('click', () => {
+      const text = $out.value.trim();
+      if (!text) { toast('먼저 코드를 생성해주세요.'); return; }
+      copyText(text);
+    });
+
+    // 초기 1회 자동 생성
+    (function init() {
+      const { base64, layout } = generateRandomLayout(HERO_LEGEND_IDS, TROOP_IDS);
+      render(base64, layout);
+    })();
+  </script>
+</body>
+</html>
