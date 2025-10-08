@@ -182,7 +182,7 @@
       // troopLayout 생성 (empty는 건너뜀)
       const troopLayout = {};
       for (const pos of troopPositions) {
-        const troopId = pick([...troopIds, null]);
+        const troopId = pick([...troopIds]); //, null]);
         if (troopId !== null) {
           troopLayout[String(pos)] = troopId;
         }
