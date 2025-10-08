@@ -12,151 +12,78 @@
       --muted: #98a3b7;
       --accent: #6ea8fe;
       --accent-2: #8be9fd;
-      --ok: #00d57a;
-      --warn: #ffb86b;
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
     body {
-      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      background: radial-gradient(1200px 800px at 20% -10%, #1b2350 0%, #0b1020 40%), var(--bg);
+      margin: 0; font-family: system-ui, sans-serif;
+      background: radial-gradient(1000px 800px at 20% -10%, #1b2350 0%, #0b1020 40%), var(--bg);
       color: var(--ink);
       display: grid; place-items: start center; padding: 32px 16px;
     }
     .app {
-      width: min(980px, 100%);
-      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      width: min(900px, 100%);
+      background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.35);
-      overflow: hidden; backdrop-filter: blur(4px);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      overflow: hidden;
     }
-    header { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 14px; }
-    header h1 { font-size: 18px; margin: 0; letter-spacing: 0.2px; }
-    header .chip { font-size: 12px; color: var(--accent-2); background: rgba(139,233,253,0.12); border: 1px solid rgba(139,233,253,0.25); padding: 4px 8px; border-radius: 999px; }
-
-    .content { padding: 20px 24px 28px; display: grid; gap: 18px; }
-
-    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-
+    header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    header h1 { margin: 0; font-size: 18px; }
+    section { padding: 20px; display: grid; gap: 16px; }
     button {
-      appearance: none; border: none; outline: none; cursor: pointer;
+      padding: 10px 14px; border: none; border-radius: 10px;
       background: linear-gradient(180deg, #28407a, #203667);
-      color: white; padding: 10px 14px; border-radius: 12px; font-weight: 600; letter-spacing: 0.2px;
-      border: 1px solid rgba(255,255,255,0.12);
-      transition: transform .06s ease, box-shadow .15s ease, background .2s ease; user-select: none;
+      color: white; font-weight: 600; cursor: pointer;
+      transition: 0.2s;
     }
-    button.secondary { background: linear-gradient(180deg, #1e253f, #1a2036); color: #dfe7ff; }
-    button:active { transform: translateY(1px); }
-    button:hover { box-shadow: 0 8px 20px rgba(110,168,254,0.2); }
-
-    .out {
-      position: relative; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); background: #0f1430;
-      padding: 12px; display: grid; gap: 10px;
+    button:hover { box-shadow: 0 4px 12px rgba(110,168,254,0.3); }
+    button.secondary { background: #1e253f; }
+    textarea {
+      width: 100%; min-height: 120px; border-radius: 10px;
+      background: #0b0f2a; color: #e8ecf3; border: 1px solid rgba(255,255,255,0.1);
+      padding: 12px; font-family: monospace;
     }
-    .label { color: var(--muted); font-size: 12px; letter-spacing: .3px; }
-
-    textarea, pre.code {
-      width: 100%; min-height: 120px; resize: vertical; padding: 12px 12px; border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.08); background: #0b0f2a; color: #e8ecf3; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      line-height: 1.35; font-size: 13px; overflow: auto;
-    }
-    pre.code { margin: 0; white-space: pre-wrap; word-break: break-word; }
-
-    .grid {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
-    }
-    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-
-    .meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
-
-    .toaster { position: fixed; inset: auto 16px 16px auto; display: grid; gap: 8px; z-index: 50; }
-    .toast { background: #11193b; border: 1px solid rgba(255,255,255,0.12); color: #e8ecf3; padding: 10px 12px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 13px; }
-
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono"; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); font-size: 12px; }
+    pre { background: #0b0f2a; padding: 12px; border-radius: 10px; font-size: 13px; overflow: auto; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #11193b; padding: 10px 16px; border-radius: 10px; }
   </style>
 </head>
 <body>
-  <div class="app" role="application" aria-label="랜덤 레이아웃 Base64 생성기">
+  <div class="app">
     <header>
-      <div class="chip">Base64 encoder</div>
       <h1>랜덤 레이아웃 코드 생성기</h1>
     </header>
-
-    <section class="content">
-      <div class="row" aria-live="polite">
-        <button id="btn-generate" aria-label="랜덤 코드 생성"><span>🎲 생성하기</span></button>
-        <button id="btn-copy" class="secondary" aria-label="코드 복사"><span>📋 복사하기</span></button>
+    <section>
+      <div>
+        <button id="generate">🎲 생성하기</button>
+        <button id="copy" class="secondary">📋 복사하기</button>
       </div>
-
-      <div class="out">
-        <div class="label">생성된 Base64 코드</div>
-        <textarea id="output" readonly spellcheck="false" placeholder="여기에 Base64 코드가 생성됩니다."></textarea>
-        <div class="meta">
-          <div>길이: <span id="len">0</span></div>
-          <div>영웅 수: <span id="heroCount">0</span></div>
-          <div>병력 칸 수: <span id="cellCount">49</span></div>
-        </div>
-      </div>
-
-      <div class="grid">
-        <div class="out">
-          <div class="label">디코딩된 JSON 미리보기</div>
-          <pre id="preview" class="code" aria-label="디코딩된 JSON"></pre>
-        </div>
-        <div class="out">
-          <div class="label">사용 방법</div>
-          <ul style="margin:8px 0 0 16px; line-height:1.6; color:var(--muted)">
-            <li><b>생성하기</b> 버튼을 눌러 새 레이아웃을 생성합니다.</li>
-            <li><b>복사하기</b>를 눌러 Base64 코드를 클립보드에 복사합니다.</li>
-            <li><span class="kbd">Ctrl/Cmd + C</span>로도 선택 영역을 복사할 수 있습니다.</li>
-          </ul>
-        </div>
-      </div>
+      <textarea id="output" readonly placeholder="여기에 Base64 코드가 생성됩니다"></textarea>
+      <pre id="json"></pre>
     </section>
   </div>
-
-  <div class="toaster" id="toaster" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast" class="toast" style="display:none;"></div>
 
   <script>
-    // ===== 데이터 원본 =====
-    const HERO_LEGEND_IDS = [
-      106, 108, 109, 113, 114, 115, 117, 118,
-      119, 126, 127, 128, 129, 130, 131, 132,
-      133, 134, 135, 136, 137, 138, 139, 140,
-      141, 142, 143, 144, 145, 150, 151, 152,
-      153
-    ];
+    const HERO_LEGEND_IDS = [106,108,109,113,114,115,117,118,119,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,150,151,152,153];
+    const TROOP_IDS = [101,102,103,104,105,106,107,109,110,111,112,113,124,125,126,132,133,134,142,143,144,145,146,147,148,149,150,151,159,160,161,162,163,164,166,168,173,178,179,180,181,182,183,186,188,189,191,192,193,198,199,200,201,202,203,210,211,212,213,214,215,216,217,219,220];
 
-    const TROOP_IDS = [
-      101, 102, 103, 104, 105, 106, 107, 109,
-      110, 111, 112, 113, 124, 125, 126, 132,
-      133, 134, 142, 143, 144, 145, 146, 147,
-      148, 149, 150, 151, 159, 160, 161, 162,
-      163, 164, 166, 168, 173, 178, 179, 180,
-      181, 182, 183, 186, 188, 189, 191, 192,
-      193, 198, 199, 200, 201, 202, 203, 210,
-      211, 212, 213, 214, 215, 216, 217, 219,
-      220
-    ];
-
-    // ===== 유틸리티 =====
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-    function generateRandomLayout(heroIds, troopIds, emptyId = 0) {
-      // 0~6, 10~16, ... , 60~66 (총 49칸)
+    function generateRandomLayout(heroIds, troopIds) {
       const troopPositions = [];
       for (let tens = 0; tens < 70; tens += 10) {
         for (let i = 0; i < 7; i++) troopPositions.push(tens + i);
       }
 
-      // troopLayout 생성
       const troopLayout = {};
       for (const pos of troopPositions) {
-        const val = pick([...troopIds, emptyId]);
-        troopLayout[String(pos)] = val;
+        const troopId = pick([...troopIds, null]);
+        if (troopId !== null) {
+          troopLayout[String(pos)] = troopId;
+        }
       }
 
-      // heroLayout 생성 (0~2 중 하나의 위치에만 배치)
       const heroLayout = {};
       if (heroIds && heroIds.length) {
         const pos = pick([0, 1, 2]);
@@ -170,77 +97,40 @@
         armyLayout: null,
       };
 
-      // JSON → Base64 (UTF-8 안전 변환)
-      const jsonStr = JSON.stringify(layout);
+      const jsonStr = JSON.stringify(layout, null, 0);
       const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
       return { base64, layout };
     }
 
-    function decodeBase64ToJson(base64) {
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      setTimeout(() => toast.style.display = 'none', 2000);
+    }
+
+    document.getElementById('generate').addEventListener('click', () => {
+      const { base64, layout } = generateRandomLayout(HERO_LEGEND_IDS, TROOP_IDS);
+      document.getElementById('output').value = base64;
+      document.getElementById('json').textContent = JSON.stringify(layout, null, 2);
+    });
+
+    document.getElementById('copy').addEventListener('click', async () => {
+      const text = document.getElementById('output').value;
+      if (!text) { showToast('먼저 코드를 생성하세요.'); return; }
       try {
-        const jsonStr = decodeURIComponent(escape(atob(base64)));
-        return JSON.parse(jsonStr);
-      } catch (e) { return null; }
-    }
-
-    // ===== UI 로직 =====
-    const $out = document.getElementById('output');
-    const $len = document.getElementById('len');
-    const $preview = document.getElementById('preview');
-    const $heroCount = document.getElementById('heroCount');
-    const $toaster = document.getElementById('toaster');
-
-    function toast(msg) {
-      const node = document.createElement('div');
-      node.className = 'toast';
-      node.textContent = msg;
-      $toaster.appendChild(node);
-      setTimeout(() => node.remove(), 2200);
-    }
-
-    function render(base64, layout) {
-      $out.value = base64;
-      $len.textContent = base64.length.toLocaleString();
-      $heroCount.textContent = Object.keys(layout.heroLayout || {}).length;
-      $preview.textContent = JSON.stringify(layout, null, 2);
-      // 자동 선택 포커스
-      $out.focus();
-      $out.select();
-    }
-
-    async function copyText(text) {
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-        } else {
-          // Fallback
-          const ta = document.createElement('textarea');
-          ta.value = text; document.body.appendChild(ta); ta.select();
-          document.execCommand('copy');
-          ta.remove();
-        }
-        toast('클립보드에 복사했어요 ✅');
-      } catch (e) {
-        console.error(e);
-        toast('복사에 실패했어요 ❌');
+        await navigator.clipboard.writeText(text);
+        showToast('복사 완료 ✅');
+      } catch {
+        showToast('복사 실패 ❌');
       }
-    }
-
-    document.getElementById('btn-generate').addEventListener('click', () => {
-      const { base64, layout } = generateRandomLayout(HERO_LEGEND_IDS, TROOP_IDS, 0);
-      render(base64, layout);
     });
 
-    document.getElementById('btn-copy').addEventListener('click', () => {
-      const text = $out.value.trim();
-      if (!text) { toast('먼저 코드를 생성해주세요.'); return; }
-      copyText(text);
-    });
-
-    // 초기 1회 자동 생성
+    // 초기 1회 생성
     (function init() {
-      const { base64, layout } = generateRandomLayout(HERO_LEGEND_IDS, TROOP_IDS, 0);
-      render(base64, layout);
+      const { base64, layout } = generateRandomLayout(HERO_LEGEND_IDS, TROOP_IDS);
+      document.getElementById('output').value = base64;
+      document.getElementById('json').textContent = JSON.stringify(layout, null, 2);
     })();
   </script>
 </body>
