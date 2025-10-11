@@ -528,30 +528,40 @@ function normalizeForView(mat32f){
   let out=new cv.Mat(); const scale=maxv>0? 255.0/maxv : 1.0; mat32f.convertTo(out, cv.CV_8U, scale, 0); return out;
 }
 function labelToColor(labels){
-  const rows = labels.rows, cols = labels.cols;
-  const out = new cv.Mat.zeros(rows, cols, cv.CV_8UC3);
-  const maxLbl = (()=>{ 
-    let m=0;
-    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-      const v=labels.intAt(r,c);
-      if(v>m) m=v;
-    }
-    return m;
-  })();
-  const scale = maxLbl>0 ? 255.0/maxLbl : 1.0;
+  // 0) 8비트로 정규화
+  let lab32f = new cv.Mat();
+  labels.convertTo(lab32f, cv.CV_32F);
+  const mm = cv.minMaxLoc(lab32f); // max 검색용
+  lab32f.delete();
 
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      const v = labels.intAt(r,c);
-      const p = out.ucharPtr(r,c);
-      if(v===0){ p[0]=p[1]=p[2]=0; continue; }  // 배경
-      const val = Math.min(255, Math.round(v*scale));
-      p[0] = 255 - val;        // B 채널
-      p[1] = Math.abs(128-val); // G 채널
-      p[2] = val;               // R 채널
-    }
-  }
-  return out;
+  let val8 = new cv.Mat();
+  const scale = mm.maxVal > 0 ? 255.0 / mm.maxVal : 1.0;
+  labels.convertTo(val8, cv.CV_8U, scale, 0); // 1채널
+
+  // 1) R = val
+  let R = val8.clone();
+
+  // 2) G = 255 - val
+  let G = new cv.Mat(val8.rows, val8.cols, cv.CV_8U, new cv.Scalar(0));
+  let S255 = new cv.Mat(val8.rows, val8.cols, cv.CV_8U, new cv.Scalar(255));
+  cv.subtract(S255, val8, G);
+
+  // 3) B = |128 - val|
+  let B = new cv.Mat(val8.rows, val8.cols, cv.CV_8U, new cv.Scalar(0));
+  let S128 = new cv.Mat(val8.rows, val8.cols, cv.CV_8U, new cv.Scalar(128));
+  cv.absdiff(val8, S128, B);
+
+  // 4) merge(B,G,R) → BGR
+  let mv = new cv.MatVector();
+  mv.push_back(B); mv.push_back(G); mv.push_back(R);
+  let out = new cv.Mat();
+  cv.merge(mv, out);
+
+  // 메모리 해제
+  mv.delete(); B.delete(); G.delete(); R.delete();
+  S128.delete(); S255.delete(); val8.delete();
+
+  return out; // CV_8UC3
 }
 
 /* ============== 파이프라인 (with progress + speedups) ============== */
