@@ -253,7 +253,7 @@ function onCvReady(){
   if (st) st.textContent='OpenCV.js 준비 완료';
 }
 
-/* ============== Common CV Utils ============== */
+/* ============== Common CV Utils (subset from previous demo) ============== */
 function matFromImage(img){ const m=cv.imread(img); let rgb=new cv.Mat(); cv.cvtColor(m,rgb,cv.COLOR_RGBA2RGB); m.delete(); return rgb; }
 function toGray(mat){ if (mat.type()===cv.CV_8UC1) return mat.clone(); let g=new cv.Mat(); cv.cvtColor(mat,g,cv.COLOR_RGB2GRAY); return g; }
 function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
@@ -270,7 +270,6 @@ function canvasFromMat(mat, canvasOrEl){
     ? document.getElementById(canvasOrEl)
     : canvasOrEl;
   if (!canvas) throw new Error('canvas element not found');
-  if (!mat || typeof mat.cols !== 'number' || typeof mat.rows !== 'number') return; // [FIX] deleted guard
   if (canvas.width !== mat.cols || canvas.height !== mat.rows){
     canvas.width  = mat.cols;
     canvas.height = mat.rows;
@@ -315,6 +314,13 @@ function fastErodeBinary(mask, kSize=3){
 }
 function fastOpenBinary(mask, kSize=3){ const er = fastErodeBinary(mask, kSize); const di = fastDilateBinary(er,  kSize); er.delete(); return di; }
 function fastCloseBinary(mask, kSize=3){ const di = fastDilateBinary(mask, kSize); const er = fastErodeBinary(di,  kSize); di.delete(); return er; }
+function morph(mat, op, kSize=3, iters=1){
+  if(op==='dilate') return fastDilateBinary(mat, kSize);
+  if(op==='erode')  return fastErodeBinary(mat,  kSize);
+  if(op==='open')   return fastOpenBinary(mat,   kSize);
+  if(op==='close')  return fastCloseBinary(mat,  kSize);
+  throw new Error(`Unknown morph op: ${op}`);
+}
 function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
 function removeSmallComponents(mask, minArea=100, area_w_wh=false){
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
@@ -325,14 +331,16 @@ function removeSmallComponents(mask, minArea=100, area_w_wh=false){
     const w=stats.intAt(i,cv.CC_STAT_WIDTH), h=stats.intAt(i,cv.CC_STAT_HEIGHT);
     if ((area_w_wh ? (w*h>=minArea) : (area>=minArea))) keep.add(i);
   }
-  // maskFromLabelsSet inline
-  const rows=labels.rows, cols=labels.cols, N=rows*cols;
-  const L = labels.data32S;
-  let out = new cv.Mat.zeros(rows, cols, cv.CV_8U);
-  const M = out.data;
-  for (let i=0;i<N;i++){ const v = L[i]; if (v>=1 && keep.has(v)) M[i]=255; }
+  const cleaned = (function(labels, keepSet){
+    const rows=labels.rows, cols=labels.cols, N=rows*cols;
+    const L = labels.data32S;
+    let out = new cv.Mat.zeros(rows, cols, cv.CV_8U);
+    const M = out.data;
+    for (let i=0;i<N;i++){ const v = L[i]; if (v>=1 && keepSet.has(v)) M[i]=255; }
+    return out;
+  })(labels, keep);
   labels.delete(); stats.delete(); cents.delete();
-  return out;
+  return cleaned;
 }
 function sampleLineVals(mat, line){
   let [x1,y1,x2,y2]=line.map(v=>Math.round(v));
@@ -458,7 +466,7 @@ function labelToColor(labels){
   return out;
 }
 
-/* ============== Detect + Recognize ============== */
+/* ============== Detect + Recognize (warps & patches) ============== */
 async function detectAndRecognize(imgRGB, opts, progress){
   const H=imgRGB.rows, W=imgRGB.cols; const dbg=[];
   progress.start(100);
@@ -471,7 +479,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     return bw;
   });
   const flatRefined = await progress.step('Morph + flat refine', 16, async ()=>{
-    const e_close = fastCloseBinary(e_log,3);
+    const e_close = morph(e_log,'close',3,1);
     let flat = new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
     const minAreaThin = (H*W/2000)|0;
     let flat2 = removeSmallComponents(flat, minAreaThin); flat.delete();
@@ -511,7 +519,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
   const { eRef2, lines, lblMap } = bandAndLines;
 
   const warpRes = await progress.step('Graph/Corners & Warp & Patches', 52, async ()=>{
-    // 군집
+    // 군집 (라벨 집합 키)
     const clusters=(function(){
       const m = new Map();
       for(let idx=0; idx<lines.length; idx++){
@@ -532,6 +540,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
 
     // 거리변환 → 대표 라인 선정
     let dist=new cv.Mat(); cv.distanceTransform(eRef2, dist, cv.DIST_L2, 3);
+    dbg.push(['e_log_dist', normalizeForView(dist)]);
     const linesBest=new Map();
     for (const [key, arr] of clusters.entries()){
       let best=null, bestScore=-1e9;
@@ -548,11 +557,353 @@ async function detectAndRecognize(imgRGB, opts, progress){
     // 그래프 + 4사이클 → 코너
     const G=buildLabelGraphFromLines(lines, lblMap);
     const cycles=G.cycles;
-    function intersectLines2(l1,l2){ const A=abcline(l1), B=abcline(l2); const det=A.a*B.b-B.a*A.b; if (Math.abs(det)<1e-9) return [NaN,NaN]; const x=(A.b*B.c-B.b*A.c)/det, y=(A.c*B.a-B.c*A.a)/det; return [x,y]; }
     const corners=(function(linesBest, cycles){
       const quads=cycles.filter(c=>c.length===4); const corners=[];
       for (const cyc of quads){
         const edges=[[cyc[0],cyc[1]],[cyc[1],cyc[2]],[cyc[2],cyc[3]],[cyc[3],cyc[0]]];
         const used=[]; let ok=true;
         for (const [u,v] of edges){ const key=(Math.min(u,v)+'-'+Math.max(u,v)); const L=linesBest.get(key); if(!L){ ok=false; break; } used.push(L); }
-        if (!ok){ corners.push([[NaN,NaN],[NaN,NaN],[NaN,NaN
+        if (!ok){ corners.push([[NaN,NaN],[NaN,NaN],[NaN,NaN],[NaN,NaN]]); continue; }
+        corners.push([
+          intersectLines(used[3],used[0]),
+          intersectLines(used[0],used[1]),
+          intersectLines(used[1],used[2]),
+          intersectLines(used[2],used[3]),
+        ]);
+      }
+      return corners;
+    })(linesBest, cycles);
+
+    let bestQuad=null, bestArea=0; for (const c of corners){ const a=polygonArea(c); if (a>bestArea){bestArea=a; bestQuad=c;} }
+    if (!bestQuad){ dist.delete(); return { ordered:null }; }
+    let ordered=orderCornersTLTRBRBL(bestQuad);
+
+    // 월드 정의
+    const borderLen = 1.0, marginAE=0.125*borderLen, marginBL=0.06*borderLen, nGrid=7;
+    const allyBorder = [[0,0],[1,0],[1,1],[0,1]];
+    const enemyBorder= [[0,-marginAE-1],[1,-marginAE-1],[1,-marginAE],[0,-marginAE]];
+    const allyInner  = [[marginBL,marginBL],[1-marginBL,marginBL],[1-marginBL,1-marginBL],[marginBL,1-marginBL]];
+    const enemyInner = [
+      [0, -marginAE-1], [1, -marginAE-1], [1, -marginAE], [0, -marginAE]
+    ].map((p,idx)=>{
+      const mv=[[-marginBL,-marginBL],[ marginBL,-marginBL],[ marginBL, marginBL],[-marginBL, marginBL]][idx];
+      return [p[0]-mv[0], p[1]-mv[1]];
+    });
+    const formLen = 1 - 2*marginBL, cell = formLen / nGrid;
+
+    function getPerspectiveTransformFromPts(srcPts, dstPts){
+      const src=cv.matFromArray(4,1,cv.CV_32FC2, srcPts.flat());
+      const dst=cv.matFromArray(4,1,cv.CV_32FC2, dstPts.flat());
+      const H=cv.getPerspectiveTransform(src,dst); src.delete(); dst.delete(); return H;
+    }
+    function projectQuad(H, quad){
+      const src=cv.matFromArray(4,1,cv.CV_32FC2, quad.flat()); let out=new cv.Mat();
+      cv.perspectiveTransform(src,out,H); const arr=[]; for (let i=0;i<4;i++) arr.push([out.floatAt(i,0), out.floatAt(i,1)]);
+      src.delete(); out.delete(); return arr;
+    }
+    function warpByPts(img, srcPts, size){
+      const dstPts=[[0,0],[size-1,0],[size-1,size-1],[0,size-1]];
+      const H=getPerspectiveTransformFromPts(srcPts,dstPts); let warped=new cv.Mat();
+      cv.warpPerspective(img,warped,H,new cv.Size(size,size),cv.INTER_LINEAR,cv.BORDER_REPLICATE); H.delete(); return warped;
+    }
+    function gridQuadAlly(i,j){ const x0 = allyInner[0][0] + j*cell; const y0 = allyInner[0][1] + i*cell; return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]]; }
+    function gridQuadEnemy(i,j){ const x0 = enemyInner[2][0] - (j+1)*cell; const y0 = enemyInner[2][1] - (i+1)*cell; return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]]; }
+
+    const sizeFull=opts.sizeFull|0, sizePatch=opts.sizePatch|0;
+    const H0=getPerspectiveTransformFromPts( allyBorder, ordered );
+    const allyInImg  = projectQuad(H0, allyBorder);
+    const enemyInImg = projectQuad(H0, enemyBorder);
+    const allyWarp   = warpByPts(imgRGB, allyInImg, sizeFull);
+    const enemyWarp  = warpByPts(imgRGB, enemyInImg, sizeFull);
+
+    const troopsAlly={}, troopsEnemy={};
+    for (let i=0;i<nGrid;i++){
+      for (let j=0;j<nGrid;j++){
+        const qa = projectQuad(H0, gridQuadAlly(i,j));
+        const qe = projectQuad(H0, gridQuadEnemy(i,j));
+        const wa = warpByPts(imgRGB, qa, sizePatch);
+        const we = warpByPts(imgRGB, qe, sizePatch);
+        troopsAlly[`${i}${j}`]=wa; troopsEnemy[`${i}${j}`]=we;
+      }
+    }
+
+    // 히어로 (그대로 추출만 – 분류는 안 함)
+    const heroesAlly={}, heroesEnemy={};
+    const hjAlly = [[0, [7, 3]], [1, [3, -1]], [2, [3, 7]]];
+    const hjEnemy= [[0, [7, 3]], [1, [3.5, -1]], [2, [3.5, 7]]];
+    for (const [k, ij] of hjAlly){ const [ii,jj]=ij; const qa = projectQuad(H0, gridQuadAlly(ii, jj)); heroesAlly[String(k)] = warpByPts(imgRGB, qa, sizePatch); }
+    for (const [k, ij] of hjEnemy){ const [ii,jj]=ij; const qe = projectQuad(H0, gridQuadEnemy(ii, jj)); heroesEnemy[String(k)] = warpByPts(imgRGB, qe, sizePatch); }
+
+    H0.delete(); dist.delete();
+    return { ordered, allyWarp, enemyWarp, troopsAlly, troopsEnemy, heroesAlly, heroesEnemy };
+  });
+
+  // Clean
+  e_log.delete(); flatRefined.delete(); bandAndLines.lblMap.delete();
+
+  return {
+    corners: warpRes.ordered,
+    ally: warpRes.allyWarp, enemy: warpRes.enemyWarp,
+    troopsAlly: warpRes.troopsAlly, troopsEnemy: warpRes.troopsEnemy,
+    heroesAlly: warpRes.heroesAlly, heroesEnemy: warpRes.heroesEnemy,
+    dbg
+  };
+}
+
+/* ============== ONNX Runtime Web: Model & Inference ============== */
+const IMG_W = 32, IMG_H = 32;
+const MEAN = [0.5, 0.5, 0.5];
+const STD  = [0.5, 0.5, 0.5];
+
+let troopSession = null, idxToLabel = null;
+
+async function loadTroopModel() {
+  if (!troopSession) {
+    troopSession = await ort.InferenceSession.create('/assets/troops_smallcnn.onnx', {
+      executionProviders: ORT_EP_ORDER,
+      graphOptimizationLevel: 'all',
+    });
+  }
+  if (!idxToLabel) {
+    const res = await fetch('/assets/troop_idx_to_label.json');
+    idxToLabel = await res.json(); // {"0":"101","1":"102",...}
+  }
+  return { troopSession, idxToLabel };
+}
+
+// cv.Mat(RGB, HxW, CV_8UC3) -> Float32Array (CHW), Normalize
+function matToNCHWFloat32(mat) {
+  let resized = mat;
+  if (mat.cols !== IMG_W || mat.rows !== IMG_H) {
+    resized = new cv.Mat();
+    cv.resize(mat, resized, new cv.Size(IMG_W, IMG_H), 0, 0, cv.INTER_LINEAR);
+  }
+  const hwc = resized.data; // Uint8Array
+  const n = IMG_W * IMG_H;
+  const chw = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) {
+    const r = hwc[i * 3 + 0] / 255;
+    const g = hwc[i * 3 + 1] / 255;
+    const b = hwc[i * 3 + 2] / 255;
+    chw[0 * n + i] = (r - MEAN[0]) / STD[0];
+    chw[1 * n + i] = (g - MEAN[1]) / STD[1];
+    chw[2 * n + i] = (b - MEAN[2]) / STD[2];
+  }
+  if (resized !== mat) resized.delete();
+  return chw;
+}
+function buildBatchTensor(mats) {
+  const n = mats.length;
+  const nchw = new Float32Array(n * 3 * IMG_H * IMG_W);
+  const stride = 3 * IMG_H * IMG_W;
+  for (let bi = 0; bi < n; bi++) {
+    const chw = matToNCHWFloat32(mats[bi]);
+    nchw.set(chw, bi * stride);
+  }
+  return new ort.Tensor('float32', nchw, [n, 3, IMG_H, IMG_W]);
+}
+async function inferTroopsFromMats(patchMats) {
+  await loadTroopModel();
+  if (patchMats.length === 0) return [];
+  const inputTensor = buildBatchTensor(patchMats);
+  const out = await troopSession.run({ images: inputTensor });
+  const logits = out.logits.data;   // Float32Array (N * C)
+  const C = out.logits.dims[1];
+  const N = out.logits.dims[0];
+
+  const results = [];
+  for (let i = 0; i < N; i++) {
+    let maxIdx = 0, maxVal = -1e9, sumExp = 0;
+    const tmp = new Float32Array(C);
+    for (let c = 0; c < C; c++) {
+      const v = logits[i * C + c];
+      tmp[c] = Math.exp(v);
+      sumExp += tmp[c];
+      if (v > maxVal) { maxVal = v; maxIdx = c; }
+    }
+    const prob = tmp[maxIdx] / sumExp;
+    const labelStr = idxToLabel[String(maxIdx)];
+    results.push({ idx: maxIdx, label: labelStr, prob });
+  }
+  return results;
+}
+
+/* ============== UI Bindings ============== */
+const fileInput=document.getElementById('file');
+fileInput.addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const img=new Image();
+  img.onload=()=>{
+    if (srcMat) srcMat.delete();
+    srcMat=matFromImage(img);
+    const c=document.getElementById('cOrig');
+    c.width=srcMat.cols; c.height=srcMat.rows;
+    canvasFromMat(srcMat,c);
+    const runBtn=document.getElementById('run');
+    if (cv && cv.Mat) runBtn.disabled=false;
+  };
+  img.src=URL.createObjectURL(f);
+});
+
+function clearContainer(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+function makeCellCanvas(title){
+  const w=document.createElement('div'); w.className='cellWrap';
+  const h4=document.createElement('h4'); h4.textContent=title; w.appendChild(h4);
+  const c=document.createElement('canvas'); w.appendChild(c);
+  return {wrap:w, canvas:c};
+}
+async function copyText(id, hintId){
+  const txt = document.getElementById(id).value;
+  try{
+    await navigator.clipboard.writeText(txt);
+    document.getElementById(hintId).textContent = '복사 완료!';
+    setTimeout(()=>document.getElementById(hintId).textContent='', 1500);
+  }catch(e){
+    document.getElementById(hintId).textContent = '복사 실패: ' + (e.message||e);
+    setTimeout(()=>document.getElementById(hintId).textContent='', 3000);
+  }
+}
+document.getElementById('copyAllyJson').addEventListener('click', ()=>copyText('allyJson','allyHint'));
+document.getElementById('copyEnemyJson').addEventListener('click', ()=>copyText('enemyJson','enemyHint'));
+document.getElementById('copyAllyB64').addEventListener('click', ()=>{
+  const js = document.getElementById('allyJson').value;
+  const b64 = btoa(unescape(encodeURIComponent(js)));
+  navigator.clipboard.writeText(b64).then(()=>{
+    document.getElementById('allyHint').textContent='Base64 복사 완료!';
+    setTimeout(()=>document.getElementById('allyHint').textContent='', 1500);
+  }).catch(e=>{
+    document.getElementById('allyHint').textContent='복사 실패: '+(e.message||e);
+  });
+});
+document.getElementById('copyEnemyB64').addEventListener('click', ()=>{
+  const js = document.getElementById('enemyJson').value;
+  const b64 = btoa(unescape(encodeURIComponent(js)));
+  navigator.clipboard.writeText(b64).then(()=>{
+    document.getElementById('enemyHint').textContent='Base64 복사 완료!';
+    setTimeout(()=>document.getElementById('enemyHint').textContent='', 1500);
+  }).catch(e=>{
+    document.getElementById('enemyHint').textContent='복사 실패: '+(e.message||e);
+  });
+});
+
+document.getElementById('run').addEventListener('click', async ()=>{
+  const runBtn=document.getElementById('run'); const st=document.getElementById('status');
+  if (!cvReady){ alert('OpenCV 초기화 전입니다. 잠시 후 다시 시도하세요.'); return; }
+  if (!srcMat){ alert('이미지를 선택하세요.'); return; }
+  runBtn.disabled=true; st.textContent='실행 중…';
+  const progress = new Progress();
+
+  try{
+    const opts={
+      angleDeg:Number(document.getElementById('angleDeg').value)||45,
+      brush:Number(document.getElementById('brush').value)||5,
+      sizeFull:Number(document.getElementById('sizeFull').value)||1024,
+      sizePatch:Number(document.getElementById('sizePatch').value)||32
+    };
+
+    // 1) Detect & Recognize (patches)
+    const res=await detectAndRecognize(srcMat, opts, progress);
+
+    // 상단 디버그
+    const grid=document.getElementById('dbgGrid'); grid.innerHTML='';
+    const idxCluster = res.dbg.findIndex(d => d[0] === 'hough');
+    if (idxCluster >= 0) {
+      const m = res.dbg[idxCluster][1];
+      const c = document.getElementById('cDebug');
+      c.width = m.cols; c.height = m.rows;
+      canvasFromMat(m, c);
+      res.dbg[idxCluster][1].delete();
+    }
+    // 나머지 중간결과(선택적으로 몇 개만)
+    for (const [title, mat] of res.dbg.slice(0, 4)) {
+      const { wrap, canvas } = makeDbgSlot(title);
+      grid.appendChild(wrap);
+      canvas.width = mat.cols; canvas.height = mat.rows;
+      canvasFromMat(mat, canvas);
+      mat.delete();
+    }
+
+    // 전체 워프
+    if (res.ally){ const cA=document.getElementById('cAlly'); cA.width=res.ally.cols; cA.height=res.ally.rows; canvasFromMat(res.ally,cA); res.ally.delete(); }
+    if (res.enemy){ const cE=document.getElementById('cEnemy'); cE.width=res.enemy.cols; cE.height=res.enemy.rows; canvasFromMat(res.enemy,cE); res.enemy.delete(); }
+
+    // 2) 시각화 패치 보드 + 추론 입력 수집
+    const gridAlly = document.getElementById('gridAlly');
+    const gridEnemy = document.getElementById('gridEnemy');
+    clearContainer(gridAlly); clearContainer(gridEnemy);
+
+    const allyKeys = [], allyMats = [];
+    const enemyKeys = [], enemyMats = [];
+    for (let i=0;i<7;i++){
+      for (let j=0;j<7;j++){
+        const key = `${i}${j}`;
+        const A = res.troopsAlly[key], E = res.troopsEnemy[key];
+
+        // Ally cell
+        const ca = makeCellCanvas(key); gridAlly.appendChild(ca.wrap);
+        if (A){ ca.canvas.width=A.cols; ca.canvas.height=A.rows; canvasFromMat(A, ca.canvas); allyKeys.push(key); allyMats.push(A); }
+
+        // Enemy cell
+        const ce = makeCellCanvas(key); gridEnemy.appendChild(ce.wrap);
+        if (E){ ce.canvas.width=E.cols; ce.canvas.height=E.rows; canvasFromMat(E, ce.canvas); enemyKeys.push(key); enemyMats.push(E); }
+      }
+    }
+    // 영웅 보드 (표시만)
+    const heroAlly = document.getElementById('heroAlly');
+    const heroEnemy = document.getElementById('heroEnemy');
+    clearContainer(heroAlly); clearContainer(heroEnemy);
+    for (let k of ['0','1','2']){
+      const HA = res.heroesAlly[k], HE = res.heroesEnemy[k];
+      const ca = makeCellCanvas(`H${k}`); heroAlly.appendChild(ca.wrap);
+      const ce = makeCellCanvas(`H${k}`); heroEnemy.appendChild(ce.wrap);
+      if (HA){ ca.canvas.width=HA.cols; ca.canvas.height=HA.rows; canvasFromMat(HA, ca.canvas); HA.delete(); }
+      if (HE){ ce.canvas.width=HE.cols; ce.canvas.height=HE.rows; canvasFromMat(HE, ce.canvas); HE.delete(); }
+    }
+
+    // 3) Troop 모델 로드 + 추론
+    await progress.step('모델 로드', 5, async ()=>{ await loadTroopModel(); });
+    const allyRes  = await progress.step('Ally 추론', 3, async ()=> await inferTroopsFromMats(allyMats) );
+    const enemyRes = await progress.step('Enemy 추론', 3, async ()=> await inferTroopsFromMats(enemyMats) );
+
+    // 4) 레이아웃 복원
+    const troopLayoutAlly = {}; const probsAlly = {};
+    for (let i=0;i<allyKeys.length;i++){ troopLayoutAlly[allyKeys[i]] = Number(allyRes[i].label); probsAlly[allyKeys[i]] = Number(allyRes[i].prob.toFixed(6)); }
+    const troopLayoutEnemy = {}; const probsEnemy = {};
+    for (let i=0;i<enemyKeys.length;i++){ troopLayoutEnemy[enemyKeys[i]] = Number(enemyRes[i].label); probsEnemy[enemyKeys[i]] = Number(enemyRes[i].prob.toFixed(6)); }
+
+    // 메모리 정리(추론용 패치들)
+    allyMats.forEach(m=>m.delete()); enemyMats.forEach(m=>m.delete());
+
+    // 5) JSON 구성 + Base64 출력
+    const ally_json = {
+      GameMode: 0,
+      troopLayout: troopLayoutAlly,
+      heroLayout: {},
+      armyLayout: null,
+      meta: { probs: probsAlly }
+    };
+    const enemy_json = {
+      GameMode: 0,
+      troopLayout: troopLayoutEnemy,
+      heroLayout: {},
+      armyLayout: null,
+      meta: { probs: probsEnemy }
+    };
+
+    const allyStr  = JSON.stringify(ally_json);
+    const enemyStr = JSON.stringify(enemy_json);
+    document.getElementById('allyJson').value  = allyStr;
+    document.getElementById('enemyJson').value = enemyStr;
+
+    progress.finish(true, res.corners ? '완료' : '코너 미검출');
+    st.textContent = res.corners ? '완료' : '코너를 찾지 못했습니다';
+  }catch(err){
+    console.error(err);
+    alert('오류가 발생했습니다: '+(err && err.message ? err.message : err));
+    progress.finish(false, '에러');
+    st.textContent='에러';
+  }finally{ runBtn.disabled=false; }
+});
+</script>
+</body>
+</html>
