@@ -497,41 +497,92 @@ async function detectAndRecognize(imgRGB, opts, progress){
     return flatRefined;
   });
 
-  const bandAndLines = await progress.step('Band & HoughLinesP (downscaled)', 12, async ()=>{
-    const ksize=(Math.max(H,W)/300)|0;
-    const bmask75=brightnessMask(gray,75);
-    const flatDil2=morph(flatRefined,'dilate',Math.max(2*ksize,1),1);
-    let flatNei2=new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
+  const bandAndLines = await progress.step('Band & Lines (profiled – Hough)', 12, async ()=>{
+    const H = imgRGB.rows, W = imgRGB.cols;
+    const t0 = performance.now();
+    const log = (label, t1) => progress._log(`  - ${label}: ${(performance.now() - t1).toFixed(1)} ms`);
+  
+    let t;
+  
+    t = performance.now();
+    const ksize = (Math.max(H, W) / 300) | 0;
+    const bmask75 = brightnessMask(gray, 75);
+    log('brightnessMask(75)', t);
+  
+    t = performance.now();
+    const flatDil2 = morph(flatRefined, 'dilate', Math.max(2 * ksize, 1), 1);
+    log('morph(dilate, flatRefined)', t);
+  
+    t = performance.now();
+    let flatNei2 = new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2);
+    flatDil2.delete();
+    log('bitwise_xor(flatDil2, flatRefined)', t);
+  
+    t = performance.now();
     dbg.push(['flat_neighbor', flatNei2.clone()]);
-    const bmaskDil=morph(bmask75,'dilate',Math.max(6*ksize,1),1);
-    let eRef=new cv.Mat(); cv.bitwise_and(flatNei2, bmaskDil, eRef);
-    eRef = morph(eRef,'open',Math.max(ksize/2|0,1),1);
-    const eRefClean=removeSmallComponents(eRef,(H*W/20)|0,true); eRef.delete();
-    let eRef2=new cv.Mat(); cv.bitwise_and(eRefClean, bmask75, eRef2); eRefClean.delete();
+    log('dbg.clone(flat_neighbor)', t);
+  
+    t = performance.now();
+    const bmaskDil = morph(bmask75, 'dilate', Math.max(6 * ksize, 1), 1);
+    log('morph(dilate, bmask75)', t);
+  
+    t = performance.now();
+    let eRef = new cv.Mat(); cv.bitwise_and(flatNei2, bmaskDil, eRef);
+    log('bitwise_and(flatNei2, bmaskDil)', t);
+    flatNei2.delete(); bmaskDil.delete();
+  
+    t = performance.now();
+    eRef = morph(eRef, 'open', Math.max((ksize / 2) | 0, 1), 1);
+    log('morph(open, eRef)', t);
+  
+    t = performance.now();
+    const eRefClean = removeSmallComponents(eRef, (H * W / 20) | 0, true);
+    eRef.delete();
+    log('removeSmallComponents(eRef)', t);
+  
+    t = performance.now();
+    let eRef2 = new cv.Mat(); cv.bitwise_and(eRefClean, bmask75, eRef2);
+    eRefClean.delete();
     dbg.push(['log_refined', eRef2.clone()]);
-
+    log('bitwise_and(eRefClean, bmask75) + dbg.clone', t);
+  
     // 다운스케일 Hough
-    const scale=0.5; // 0.5~0.75 권장
-    let small=new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
-    let linesP=new cv.Mat();
+    const scale = 0.5;
+    t = performance.now();
+    let small = new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
+    log('resize(eRef2 → small)', t);
+  
+    t = performance.now();
+    let linesP = new cv.Mat();
     cv.HoughLinesP(
       small, linesP,
       1.0, Math.PI/720,
-      Math.max(H,W)/16|0,                 // 완화
-      (Math.max(H,W)/12|0)*scale,
-      (Math.max(H,W)/12|0)*scale
+      Math.max(H, W) / 16 | 0,
+      (Math.max(H, W) / 12 | 0) * scale,
+      (Math.max(H, W) / 12 | 0) * scale
     );
-    const lines=[]; for(let i=0;i<linesP.rows;i++){
-      const x1=linesP.intAt(i,0)/scale, y1=linesP.intAt(i,1)/scale;
-      const x2=linesP.intAt(i,2)/scale, y2=linesP.intAt(i,3)/scale;
-      lines.push([x1|0,y1|0,x2|0,y2|0]);
+    const lines = [];
+    for (let i=0;i<linesP.rows;i++){
+      lines.push([
+        (linesP.intAt(i,0) / scale) | 0,
+        (linesP.intAt(i,1) / scale) | 0,
+        (linesP.intAt(i,2) / scale) | 0,
+        (linesP.intAt(i,3) / scale) | 0
+      ]);
     }
     linesP.delete(); small.delete();
+    log('HoughLinesP + scale back', t);
+  
+    t = performance.now();
     dbg.push(['hough', drawLinesOn(imgRGB, lines, [255,128,0], 2)]);
-
-    // 교차 라벨
-    const inter = countIntersectionsByPaint(lines, opts.brush|0, opts.angleDeg|0, [H,W]);
+    log('dbg(hough lines render)', t);
+  
+    t = performance.now();
+    const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W]);
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
+    log('countIntersectionsByPaint + dbg(labelToColor)', t);
+  
+    progress._log(`  Σ Band & Lines total: ${(performance.now() - t0).toFixed(1)} ms`);
     return { eRef2, lines, lblMap: inter.labels };
   });
 
