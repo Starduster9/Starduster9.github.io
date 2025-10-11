@@ -609,6 +609,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const bmask75 = brightnessMask(gray, 75);
 
     const flatRadius = Math.max(2 * ksize, 1);
+    alert(flatRadius)
     const flatDil2 = fastDilateBinary(flatRefined, flatRadius);
     let flatNei2 = new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
     dbg.push(['flat_neighbor', flatNei2.clone()]);
