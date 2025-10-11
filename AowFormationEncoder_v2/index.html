@@ -139,10 +139,16 @@ function percentileGray(mat, perc){
   return thr|0;
 }
 function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
+  const c = new cv.Scalar(
+    Array.isArray(color)? (color[0] ?? 255) : 255,
+    Array.isArray(color)? (color[1] ?? 255) : 255,
+    Array.isArray(color)? (color[2] ?? 255) : 255,
+    255
+  );
   let out = mat.clone();
   for (const l of lines){
     const [x1,y1,x2,y2] = l;
-    cv.line(out, new cv.Point(x1,y1), new cv.Point(x2,y2), color, thickness, cv.LINE_AA);
+    cv.line(out, new cv.Point(x1,y1), new cv.Point(x2,y2), c, thickness, cv.LINE_AA);
   }
   return out;
 }
@@ -264,7 +270,7 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
       const X = x1 + t*(x2-x1); const Y = y1 + t*(y2-y1);
       const cx = Math.round(X), cy=Math.round(Y);
       const axes = new cv.Size( (brushSize*2)|0, brushSize|0 );
-      cv.ellipse(mask, new cv.Point(cx,cy), axes, 0, 0, 360, new cv.Scalar(255), -1);
+      cv.ellipse($1, new cv.Point(cx,cy), axes, 0, 0, 360, new cv.Scalar(255,255,255,255), -1);
     }
   }
   let labels = new cv.Mat(); let stats = new cv.Mat(); let cents = new cv.Mat();
