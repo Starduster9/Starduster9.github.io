@@ -361,7 +361,7 @@ function sampleLineVals(mat, line){
 }
 
 /* ===== 교차 라벨 생성: 전수 비교(O(N^2)) ===== */
-function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape, prog){
+function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const [H, W] = imgShape;
   const N = lines.length | 0;
   const eps = 1e-9;
@@ -379,7 +379,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape, prog){
   const ang = l => Math.atan2(l[3]-l[1], l[2]-l[0]);
   const angles = new Array(N);
   for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
-  logger(`  [CI] angles precompute: ${(performance.now()-t1).toFixed(1)} ms`);
 
   // 2) 쌍 검사(O(N^2)) + 교점 수집
   const t2 = performance.now();
@@ -404,7 +403,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape, prog){
       dotsPainted++; pairsTried++;
     }
   }
-  logger(`  [CI] pairwise check: ${(performance.now()-t2).toFixed(1)} ms (pairs=${pairsTried}, dots=${dotsPainted})`);
 
   // 3) (옵션) 다운스케일 마스크에서 작업
   const scale = 1.0; // 필요시 0.5 등으로 내려 CC 시간 절약 가능
@@ -420,7 +418,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape, prog){
     const ys = Math.min(hS-1, Math.max(0, Math.round(pts[k+1] * scale)));
     M[ys*wS + xs] = 255;
   }
-  logger(`  [CI] plot points: ${(performance.now()-t4).toFixed(1)} ms`);
 
   // 5) 반경 보정: EDT 기반 1회 팽창
   const t5 = performance.now();
@@ -433,18 +430,12 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape, prog){
   dist.delete();
   let maskDil = new cv.Mat(); dil.convertTo(maskDil, cv.CV_8U); dil.delete();
   mask.delete();
-  logger(`  [CI] dilate (EDT+thresh): ${(performance.now()-t5).toFixed(1)} ms`);
 
   // 6) 연결 성분
   const t6 = performance.now();
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
   const n = cv.connectedComponentsWithStats(maskDil, labels, stats, cents, 4, cv.CV_32S);
   maskDil.delete(); stats.delete(); cents.delete();
-  logger(`  [CI] connected components: ${(performance.now()-t6).toFixed(1)} ms`);
-
-  // 총합
-  logger(`  [CI] total: ${(performance.now()-tAll0).toFixed(1)} ms`);
-  logger(`    • components: ${Math.max(n-1,0)}`);
 
   return { count: Math.max(n-1,0), labels };
 }
@@ -672,7 +663,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     log('dbg(hough lines render)', t);
   
     t = performance.now();
-    const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W], progress);
+    const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W]);
     log('countIntersectionsByPaint', t);
     t = performance.now();
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
