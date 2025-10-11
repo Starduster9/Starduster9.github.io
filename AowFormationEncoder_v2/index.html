@@ -536,12 +536,16 @@ function normalizeForView(mat32f){
   const mm=cv.minMaxLoc(mat32f); const maxv=(mm && typeof mm.maxVal==='number')? mm.maxVal : 0;
   let out=new cv.Mat(); const scale=maxv>0? 255.0/maxv : 1.0; mat32f.convertTo(out, cv.CV_8U, scale, 0); return out;
 }
-function labelToColor(labels){
-  let out=new cv.Mat.zeros(labels.rows,labels.cols,cv.CV_8UC3);
-  let maxLbl=0; for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++) maxLbl=Math.max(maxLbl, labels.intAt(r,c));
-  const colors={0:[0,0,0]}; for (let i=1;i<=maxLbl;i++) colors[i]=[40+Math.random()*215|0,40+Math.random()*215|0,40+Math.random()*215|0];
-  for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++){ const v=labels.intAt(r,c); const col=colors[v]||[0,0,0]; const p=out.ucharPtr(r,c); p[0]=col[0]; p[1]=col[1]; p[2]=col[2]; }
-  return out;
+function labelToColor(labels) {
+  // 라벨을 0~255로 정규화
+  const norm = new cv.Mat();
+  const minMax = cv.minMaxLoc(labels);
+  const maxv = minMax.maxVal || 1;
+  labels.convertTo(norm, cv.CV_8U, 255.0 / maxv);
+  const colored = new cv.Mat();
+  cv.applyColorMap(norm, colored, cv.COLORMAP_JET);
+  norm.delete();
+  return colored;
 }
 
 /* ============== 파이프라인 (with progress + speedups) ============== */
