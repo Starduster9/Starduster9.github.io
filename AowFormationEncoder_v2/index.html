@@ -659,13 +659,13 @@ let troopSession = null, idxToLabel = null;
 
 async function loadTroopModel() {
   if (!troopSession) {
-    troopSession = await ort.InferenceSession.create('/assets/troops_smallcnn.onnx', {
+    troopSession = await ort.InferenceSession.create('assets/troops_smallcnn.onnx', {
       executionProviders: ORT_EP_ORDER,
       graphOptimizationLevel: 'all',
     });
   }
   if (!idxToLabel) {
-    const res = await fetch('/assets/troop_idx_to_label.json');
+    const res = await fetch('assets/troop_idx_to_label.json');
     idxToLabel = await res.json(); // {"0":"101","1":"102",...}
   }
   return { troopSession, idxToLabel };
