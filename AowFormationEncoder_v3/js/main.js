@@ -1,12 +1,29 @@
 /* 앱 엔트리: 모듈 초기화 + UI 바인딩 */
-import './progress.js'; // CSS/DOM 요소를 바라보는 클래스
-import { onCvReady } from './cv-utils.js';
+import './progress.js';
 import { initUI } from './ui.js';
 
-
-// OpenCV 준비 이벤트가 오면 상태 갱신됨 (cv-utils 가 window.onCvReady 핸들함)
-window.addEventListener('cv-ready', ()=>{ /* 필요 시 추가 초기화 가능 */ });
-
-
-// UI 셋업
 initUI();
+
+/**
+ * OpenCV 로더/모듈 로딩 순서 경합을 막기 위한 안전장치.
+ * - 커스텀 이벤트 'cv-ready'가 오면 즉시 실행 버튼을 해제
+ * - 혹시 이벤트를 놓쳐도 주기적으로 상태를 확인하여 버튼을 풀어줌
+ */
+function tryEnableRun() {
+  const runEl = document.getElementById('run');
+  if (runEl && window.cv && cv.Mat) {
+    runEl.disabled = false;
+  }
+}
+
+// 로더에서 onCvReady가 호출될 때 커스텀 이벤트를 쏘도록 되어 있음
+window.addEventListener('cv-ready', tryEnableRun);
+
+// 폴백: 300ms 간격으로 최대 약 10초 확인
+let tries = 0;
+const iv = setInterval(() => {
+  tryEnableRun();
+  if (++tries >= 34 || (window.cv && cv.Mat)) {
+    clearInterval(iv);
+  }
+}, 300);
