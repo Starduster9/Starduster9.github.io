@@ -1,60 +1,34 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head>
+<header>
+  <div class="title" role="heading" aria-level="1">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 5h16v6H4z" stroke="#9fb3ff" stroke-width="1.8"/>
+      <path d="M8 15h8m-6 4h4" stroke="#9fb3ff" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <h1>이미지 → 반죽 변환기 (아레나 전용)</h1>
+  </div>
+  <div class="subtitle">
+    순서대로 따라만 하세요. <strong>① 이미지 선택 → ② 변환 → ③ 반죽 복사</strong> 끝!
+    <br><span aria-label="제작 크레딧">만든이: Starduster</span>
+  </div>
+</header>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Formation Detector + Troop Inference (OpenCV.js + ONNX Runtime Web)</title>
-<style>
-:root{--bg:#0b0d10;--card:#12161b;--ink:#e6edf3;--muted:#9aa7b5;--accent:#5b9cff;--ok:#28a745;--err:#ff5d5d}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Apple SD Gothic Neo,Malgun Gothic,sans-serif}
-header{display:flex;gap:12px;align-items:center;padding:16px 20px;border-bottom:1px solid #1e242c}
-header h1{font-size:16px;margin:0;letter-spacing:.2px}
-.badge{padding:2px 8px;border-radius:999px;background:#1a2330;border:1px solid #2a3442;color:var(--muted)}
-main{display:grid;grid-template-columns:360px 1fr;gap:16px;padding:16px}
-.panel{background:var(--card);border:1px solid #1e242c;border-radius:16px;padding:14px}
-.panel h2{margin:0 0 12px 0;font-size:14px;color:var(--muted);font-weight:600}
-.row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-input[type=file]{width:100%}
-.btn{appearance:none;background:var(--accent);color:#fff;border:none;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
-.btn[disabled]{opacity:.6;cursor:default}
-label{color:var(--muted);font-size:12px}
-.grid{display:grid;grid-template-columns:repeat(3, minmax(200px,1fr));gap:12px}
-.slot{background:#0f1318;border:1px dashed #2a3442;border-radius:12px;padding:8px}
-.slot h3{margin:0 0 8px 0;font-size:12px;color:var(--muted)}
-canvas{display:block;width:100%;height:auto;background:#0b0d10;border-radius:8px}
-.note{color:var(--muted);font-size:12px}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 10px}
-footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
-.progress-card{margin-top:12px;background:#0f1318;border:1px solid #2a3442;border-radius:12px;padding:12px}
-.progress-bar{position:relative;height:10px;width:100%;background:#11161d;border:1px solid #2a3442;border-radius:999px;overflow:hidden}
-.progress-bar>span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#7db5ff);transition:width .15s ease}
-.progress-head{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
-.progress-head .step{font-weight:600}
-.progress-head .pct,.progress-head .elapsed{color:var(--muted);font-size:12px}
-.logs{margin-top:8px;max-height:180px;overflow:auto;background:#0b0f14;border:1px solid #1e2330;border-radius:8px}
-.logs pre{margin:0;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}
-.success{color:var(--ok)}
-.error{color:var(--err)}
-/* 패치 보드 */
-.grid7{display:grid;grid-template-columns:repeat(7, minmax(40px,1fr));gap:8px}
-.gridHeroes{display:grid;grid-template-columns:repeat(3, minmax(64px,1fr));gap:8px}
-.subhead{margin:10px 0 6px 0;color:var(--muted);font-size:12px;font-weight:600}
-.cellWrap{display:flex;flex-direction:column;gap:6px}
-.cellWrap h4{margin:0;font-size:11px;color:var(--muted)}
-.cellWrap canvas{width:100%;height:auto;border-radius:8px;background:#0b0d10}
-/* Export */
-.export{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-textarea.code{width:100%;min-height:160px;background:#0b0f14;color:#cfe3ff;border:1px solid #1e2330;border-radius:8px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
-.btnRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-small.hint{color:var(--muted)}
-</style>
+<title>이미지 → 반죽 변환기 (아레나 전용)</title>
+<meta name="color-scheme" content="dark light">
+<link rel="stylesheet" href="style.css">
 
 <!-- OpenCV.js: 두 개 CDN 시도 + 런타임 폴링 -->
 <script>
 (function(){
   let statusEl=null, readyCalled=false, pollId=null;
-  function setStatus(t){ if(!statusEl)statusEl=document.getElementById('status'); if(statusEl)statusEl.textContent=t; }
+  function setStatus(t){
+    if(!statusEl)statusEl=document.getElementById('status');
+    if(statusEl)statusEl.textContent=t;
+    const tpl = document.getElementById('tplStatus');  // 추가
+    if (tpl) tpl.textContent = t;                      // 추가
+  }
   function callReadyOnce(){ if(!readyCalled){ readyCalled=true; if(typeof onCvReady==='function') onCvReady(); } }
   window.onOpenCvLoaded=function(){
     if (typeof cv !== 'undefined'){
@@ -102,92 +76,100 @@ small.hint{color:var(--muted)}
 </header>
 
 <main>
-  <section class="panel" id="controls">
-    <h2>입력 & 설정</h2>
-    <div class="row"><input id="file" type="file" accept="image/*" /></div>
-    <div class="kv">
-      <label for="sizeFull">size_full</label>
-      <input id="sizeFull" type="number" value="1024" min="256" max="4096" />
-      <label for="sizePatch">size_patch</label>
-      <input id="sizePatch" type="number" value="32" min="8" max="512" />
-      <label for="angleDeg">교차 각 임계(angle_deg)</label>
-      <input id="angleDeg" type="number" value="45" min="0" max="90" />
-      <label for="brush">브러시 반경(px)</label>
-      <input id="brush" type="number" value="5" min="1" max="40" />
-    </div>
-    <div class="row">
-      <button id="run" class="btn" disabled>실행 (탐지 → 추론 → 출력)</button>
-      <span class="note" id="status">OpenCV.js 초기화 대기중…</span>
+  <!-- 1단계: 이미지 선택 -->
+  <section class="card fade-in" aria-labelledby="step1">
+    <div class="step-title" id="step1">① 이미지 선택</div>
+    <p id="fileHint" class="hint">전투 결과 스크린샷 파일을 올리세요. (용병이 꽉 차있지 않으면 실패할 수 있어요)</p>
+
+    <div class="grid" style="margin-top:8px">
+      <label for="file" class="sr-only">이미지 파일 선택</label>
+      <input id="file" type="file" accept="image/*" aria-describedby="fileHint" />
+      <img id="thumb" class="thumb" alt="미리보기 이미지" hidden />
     </div>
 
-    <!-- Progress Card -->
-    <div class="progress-card">
-      <div class="progress-bar"><span id="bar"></span></div>
-      <div class="progress-head">
-        <span class="step" id="stepText">대기 중</span>
-        <span class="pct" id="pctText">0%</span>
-        <span class="elapsed" id="elapsed">경과 0.0s</span>
-      </div>
-      <details>
-        <summary style="cursor:pointer;margin-top:6px;color:var(--muted)">세부 로그</summary>
-        <div class="logs"><pre id="log"></pre></div>
-      </details>
+    <progress id="tplProgress" max="100" value="0" style="width:100%; margin-top:12px"></progress>
+    <div id="tplStatus" class="status" aria-live="polite"></div>
+  </section>
+
+  <!-- 2단계: 변환 -->
+  <section class="card fade-in" aria-labelledby="step2">
+    <div class="step-title" id="step2">② 변환</div>
+    <p class="hint">아래 버튼을 누르면 자동으로 분석하고 결과를 만들어 드립니다.</p>
+    <div class="actions">
+      <button id="run" class="primary" type="button" disabled>변환 시작</button>
+      <span id="status" class="status" aria-live="polite"></span>
     </div>
   </section>
 
-  <section class="panel">
-    <h2>결과</h2>
-    <div class="split">
-      <div class="slot"><h3>원본</h3><canvas id="cOrig"></canvas></div>
-      <div class="slot"><h3>탐지 결과(라인/클러스터)</h3><canvas id="cDebug"></canvas></div>
-    </div>
-    <div class="split" style="margin-top:12px">
-      <div class="slot"><h3>Ally (워프)</h3><canvas id="cAlly"></canvas></div>
-      <div class="slot"><h3>Enemy (워프)</h3><canvas id="cEnemy"></canvas></div>
-    </div>
+  <!-- 3단계: 반죽 결과(아군/적군) -->
+  <section class="card fade-in" aria-labelledby="step3">
+    <div class="step-title" id="step3">③ 반죽 결과</div>
 
-    <!-- 패치 보드 -->
-    <div class="split" style="margin-top:12px">
-      <div class="slot">
-        <h3>Ally – Troops (7×7)</h3>
-        <div id="gridAlly" class="grid7"></div>
-        <div class="subhead">Ally – Heroes</div>
-        <div id="heroAlly" class="gridHeroes"></div>
-      </div>
-      <div class="slot">
-        <h3>Enemy – Troops (7×7)</h3>
-        <div id="gridEnemy" class="grid7"></div>
-        <div class="subhead">Enemy – Heroes</div>
-        <div id="heroEnemy" class="gridHeroes"></div>
-      </div>
-    </div>
-
-    <!-- Export (JSON & Base64 + Copy) -->
-    <h3 style="margin-top:16px;color:var(--muted);font-size:12px">Export</h3>
-    <div class="export">
-      <div class="slot">
-        <h3>Ally JSON</h3>
-        <textarea id="allyJson" class="code" readonly></textarea>
-        <div class="btnRow">
-          <button id="copyAllyJson" class="btn">Ally JSON 복사</button>
-          <button id="copyAllyB64"  class="btn">Ally Base64 복사</button>
+    <div class="grid" style="margin-top:8px">
+      <!-- 아군 -->
+      <div>
+        <div class="copy-row">
+          <span class="hint">아군 반죽</span>
+          <button id="copyAllyB64" class="ghost" type="button" aria-label="아군 반죽 복사">복사</button>
+          <span id="allyB64Copied" class="status ok" role="status" style="display:none">복사되었습니다!</span>
         </div>
-        <small class="hint" id="allyHint"></small>
+        <textarea id="allyB64" readonly aria-label="아군 반죽"></textarea>
       </div>
-      <div class="slot">
-        <h3>Enemy JSON</h3>
-        <textarea id="enemyJson" class="code" readonly></textarea>
-        <div class="btnRow">
-          <button id="copyEnemyJson" class="btn">Enemy JSON 복사</button>
-          <button id="copyEnemyB64"  class="btn">Enemy Base64 복사</button>
+
+      <!-- 적군 -->
+      <div>
+        <div class="copy-row">
+          <span class="hint">적군 반죽</span>
+          <button id="copyEnemyB64" class="ghost" type="button" aria-label="적군 반죽 복사">복사</button>
+          <span id="enemyB64Copied" class="status ok" role="status" style="display:none">복사되었습니다!</span>
         </div>
-        <small class="hint" id="enemyHint"></small>
+        <textarea id="enemyB64" readonly aria-label="적군 반죽"></textarea>
       </div>
     </div>
 
-    <h3 style="margin-top:16px;color:var(--muted);font-size:12px">중간 결과</h3>
-    <div class="grid" id="dbgGrid"></div>
+    <details style="margin-top:12px">
+      <summary>로그 자세히 보기</summary>
+
+      <!-- 디버그 미리보기 (접힘) -->
+      <div class="preview-wrap" style="margin-top:10px">
+        <canvas id="cOrig"  width="800" height="800" aria-label="원본 이미지 미리보기"></canvas>
+        <canvas id="cDebug" width="800" height="800" aria-label="탐지 라인 미리보기" style="margin-top:8px"></canvas>
+        <canvas id="cAlly"  width="800" height="800" aria-label="아군 영역 워프" style="margin-top:8px"></canvas>
+        <canvas id="cEnemy" width="800" height="800" aria-label="적군 영역 워프" style="margin-top:8px"></canvas>
+      </div>
+
+      <!-- JSON 결과 + 복사 -->
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <label for="allyJson">아군 JSON</label>
+          <div class="copy-row">
+            <button id="copyAllyJson" class="ghost" type="button" aria-label="아군 JSON 복사">복사</button>
+            <span id="allyJsonCopied" class="status ok" role="status" style="display:none">복사되었습니다!</span>
+          </div>
+          <textarea id="allyJson" readonly aria-label="아군 JSON 결과"></textarea>
+        </div>
+        <div>
+          <label for="enemyJson">적군 JSON</label>
+          <div class="copy-row">
+            <button id="copyEnemyJson" class="ghost" type="button" aria-label="적군 JSON 복사">복사</button>
+            <span id="enemyJsonCopied" class="status ok" role="status" style="display:none">복사되었습니다!</span>
+          </div>
+          <textarea id="enemyJson" readonly aria-label="적군 JSON 결과"></textarea>
+        </div>
+      </div>
+
+      <!-- 진행/로그 -->
+      <div style="margin-top:12px">
+        <progress id="dbgProgress" max="100" value="0" style="width:100%"></progress>
+        <div class="status" id="dbgStep" aria-live="polite"></div>
+        <pre id="log" class="hint" style="white-space:pre-wrap"></pre>
+      </div>
+    </details>
   </section>
+
+  <p class="hint" style="text-align:center">
+    이 도구는 브라우저에서만 작동하는 서버리스(OpenCV.js) 버전입니다. 파일은 외부로 업로드되지 않습니다.
+  </p>
 </main>
 
 <footer>브라우저에서 온디바이스 추론 (OpenCV.js + ONNX Runtime Web). 파일은 로컬에서만 처리됩니다.</footer>
@@ -927,209 +909,159 @@ async function inferTroopsFromMats(patchMats) {
 }
 
 /* ============== UI Bindings ============== */
-const fileInput=document.getElementById('file');
-fileInput.addEventListener('change', e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const img=new Image();
-  img.onload=()=>{
+/* ====== 고정 옵션 (이전 숫자 입력값 대체) ====== */
+const FIXED_OPTS = {
+  angleDeg: 45,
+  brush: 5,
+  sizeFull: 1024,
+  sizePatch: 32
+};
+
+/* ====== 썸네일 및 파일 로드 ====== */
+const fileInput = document.getElementById('file');
+const thumb = document.getElementById('thumb');
+fileInput.addEventListener('change', e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
     if (srcMat) srcMat.delete();
-    srcMat=matFromImage(img);
-    const c=document.getElementById('cOrig');
-    c.width=srcMat.cols; c.height=srcMat.rows;
-    canvasFromMat(srcMat,c);
-    const runBtn=document.getElementById('run');
-    if (cv && cv.Mat) runBtn.disabled=false;
+    srcMat = matFromImage(img);
+    // 썸네일 표시
+    thumb.hidden = false;
+    const scale = Math.min(240 / img.width, 240 / img.height, 1);
+    const cvs = document.createElement('canvas');
+    cvs.width = Math.round(img.width * scale);
+    cvs.height = Math.round(img.height * scale);
+    const ctx = cvs.getContext('2d');
+    ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+    thumb.src = cvs.toDataURL('image/png');
+
+    // 원본 캔버스(접힌 영역)도 갱신
+    const cOrig = document.getElementById('cOrig');
+    cOrig.width = srcMat.cols; cOrig.height = srcMat.rows;
+    canvasFromMat(srcMat, cOrig);
+
+    // 실행 버튼 활성화
+    const runBtn = document.getElementById('run');
+    if (cv && cv.Mat) runBtn.disabled = false;
   };
-  img.src=URL.createObjectURL(f);
+  img.src = URL.createObjectURL(f);
 });
 
-function clearContainer(node){ while(node.firstChild) node.removeChild(node.firstChild); }
-function makeCellCanvas(title){
-  const w=document.createElement('div'); w.className='cellWrap';
-  const h4=document.createElement('h4'); h4.textContent=title; w.appendChild(h4);
-  const c=document.createElement('canvas'); w.appendChild(c);
-  return {wrap:w, canvas:c};
-}
-async function copyText(id, hintId){
-  const txt = document.getElementById(id).value;
-  try{
-    await navigator.clipboard.writeText(txt);
-    document.getElementById(hintId).textContent = '복사 완료!';
-    setTimeout(()=>document.getElementById(hintId).textContent='', 1500);
-  }catch(e){
-    document.getElementById(hintId).textContent = '복사 실패: ' + (e.message||e);
-    setTimeout(()=>document.getElementById(hintId).textContent='', 3000);
+/* ====== 복사 유틸 ====== */
+async function copyTextToClipboard(text, okEl) {
+  try {
+    await navigator.clipboard.writeText(text);
+    okEl.style.display = '';
+    setTimeout(() => { okEl.style.display = 'none'; }, 1200);
+  } catch (e) {
+    alert('복사 실패: ' + (e?.message || e));
   }
 }
-document.getElementById('copyAllyJson').addEventListener('click', ()=>copyText('allyJson','allyHint'));
-document.getElementById('copyEnemyJson').addEventListener('click', ()=>copyText('enemyJson','enemyHint'));
-document.getElementById('copyAllyB64').addEventListener('click', ()=>{
-  const js = document.getElementById('allyJson').value;
-  const b64 = btoa(unescape(encodeURIComponent(js)));
-  navigator.clipboard.writeText(b64).then(()=>{
-    document.getElementById('allyHint').textContent='Base64 복사 완료!';
-    setTimeout(()=>document.getElementById('allyHint').textContent='', 1500);
-  }).catch(e=>{
-    document.getElementById('allyHint').textContent='복사 실패: '+(e.message||e);
-  });
+document.getElementById('copyAllyB64').addEventListener('click', () => {
+  copyTextToClipboard(document.getElementById('allyB64').value, document.getElementById('allyB64Copied'));
 });
-document.getElementById('copyEnemyB64').addEventListener('click', ()=>{
-  const js = document.getElementById('enemyJson').value;
-  const b64 = btoa(unescape(encodeURIComponent(js)));
-  navigator.clipboard.writeText(b64).then(()=>{
-    document.getElementById('enemyHint').textContent='Base64 복사 완료!';
-    setTimeout(()=>document.getElementById('enemyHint').textContent='', 1500);
-  }).catch(e=>{
-    document.getElementById('enemyHint').textContent='복사 실패: '+(e.message||e);
-  });
+document.getElementById('copyEnemyB64').addEventListener('click', () => {
+  copyTextToClipboard(document.getElementById('enemyB64').value, document.getElementById('enemyB64Copied'));
+});
+document.getElementById('copyAllyJson').addEventListener('click', () => {
+  copyTextToClipboard(document.getElementById('allyJson').value, document.getElementById('allyJsonCopied'));
+});
+document.getElementById('copyEnemyJson').addEventListener('click', () => {
+  copyTextToClipboard(document.getElementById('enemyJson').value, document.getElementById('enemyJsonCopied'));
 });
 
-document.getElementById('run').addEventListener('click', async ()=>{
-  const runBtn=document.getElementById('run'); const st=document.getElementById('status');
-  if (!cvReady){ alert('OpenCV 초기화 전입니다. 잠시 후 다시 시도하세요.'); return; }
-  if (!srcMat){ alert('이미지를 선택하세요.'); return; }
-  runBtn.disabled=true; st.textContent='실행 중…';
+/* ====== 진행 표시 (접힌 영역용, 간단 바인딩) ====== */
+const dbgProgress = document.getElementById('dbgProgress');
+const dbgStep = document.getElementById('dbgStep');
+const oldProgressStep = Progress.prototype.step;
+Progress.prototype.step = async function(label, weight, fn){
+  dbgStep.textContent = label;
+  const v = Math.round((this.doneWeight / Math.max(1, this.totalWeight)) * 100);
+  dbgProgress.value = v;
+  return await oldProgressStep.call(this, label, weight, fn);
+};
+const oldFinish = Progress.prototype.finish;
+Progress.prototype.finish = function(ok=true, msg='완료'){
+  dbgProgress.value = 100;
+  dbgStep.textContent = msg;
+  return oldFinish.call(this, ok, msg);
+};
+
+/* ====== 실행 버튼 ====== */
+document.getElementById('run').addEventListener('click', async () => {
+  const runBtn = document.getElementById('run');
+  const st = document.getElementById('status');
+  if (!cvReady) { alert('OpenCV 초기화 전입니다. 잠시 후 다시 시도하세요.'); return; }
+  if (!srcMat) { alert('이미지를 선택하세요.'); return; }
+
+  runBtn.disabled = true;
+  st.textContent = '실행 중…';
+
+  // 진행/로그 초기화
+  document.getElementById('log').textContent = '';
+  dbgProgress.value = 0; dbgStep.textContent = '준비 중';
+
   const progress = new Progress();
 
-  try{
-    const opts={
-      angleDeg:Number(document.getElementById('angleDeg').value)||45,
-      brush:Number(document.getElementById('brush').value)||5,
-      sizeFull:Number(document.getElementById('sizeFull').value)||1024,
-      sizePatch:Number(document.getElementById('sizePatch').value)||32
-    };
+  try {
+    // 1) Detect & Recognize
+    const res = await detectAndRecognize(srcMat, FIXED_OPTS, progress);
 
-    // 1) Detect & Recognize (patches)
-    const res=await detectAndRecognize(srcMat, opts, progress);
-
-    // === 안전한 디버그 렌더링 ===
-    const grid = document.getElementById('dbgGrid');
-    grid.innerHTML = '';
-    
-    // res.dbg는 형태가 [ [title, mat], ... ] 이므로,
-    // 여기서 shallow copy를 만들고, 'hough'를 분리해서 먼저 렌더링만 하고,
-    // 모든 렌더가 끝난 뒤에 한꺼번에 delete() 합니다.
-    const dbgEntries = res.dbg.slice(); // [[title, Mat], ...]
-    const matsToFree = [];
-    
-    // 1) 'hough' (라인 결과)를 상단 큰 캔버스에 먼저 표시 (삭제는 나중에)
-    const idxHough = dbgEntries.findIndex(d => d[0] === 'hough');
-    if (idxHough >= 0) {
-      const m = dbgEntries[idxHough][1];
-      const c = document.getElementById('cDebug');
-      try {
-        c.width = m.cols; 
-        c.height = m.rows;
-        canvasFromMat(m, c);
-      } catch (e) {
-        console.warn('Failed to render hough debug mat:', e);
-      }
-      // 삭제는 나중에 일괄
-      matsToFree.push(m);
-    }
-    
-    // 2) 나머지 디버그 이미지들을 보드에 렌더 (제한적으로 3~5개만 노출해도 OK)
-    for (let i = 0, shown = 0; i < dbgEntries.length; i++) {
-      if (i === idxHough) continue; // 이미 위에서 렌더
-      const [title, mat] = dbgEntries[i];
-      const { wrap, canvas } = makeDbgSlot(title);
-      grid.appendChild(wrap);
-      try {
-        canvas.width = mat.cols; 
-        canvas.height = mat.rows;
-        canvasFromMat(mat, canvas);
-      } catch (e) {
-        console.warn(`Failed to render dbg mat '${title}':`, e);
-      }
-      matsToFree.push(mat);
-      if (++shown >= 4) break;  // 너무 많이 띄우면 리소스 큼 → 4개만 예시로
-    }
-    
-    // 3) 이제 안전하게 모두 해제
-    for (const m of matsToFree) {
-      try { m.delete(); } catch (_) {}
-    }
-
-    // 전체 워프
+    // 2) 디버그 캔버스 (접힌 영역)
     if (res.ally){ const cA=document.getElementById('cAlly'); cA.width=res.ally.cols; cA.height=res.ally.rows; canvasFromMat(res.ally,cA); res.ally.delete(); }
     if (res.enemy){ const cE=document.getElementById('cEnemy'); cE.width=res.enemy.cols; cE.height=res.enemy.rows; canvasFromMat(res.enemy,cE); res.enemy.delete(); }
 
-    // 2) 시각화 패치 보드 + 추론 입력 수집
-    const gridAlly = document.getElementById('gridAlly');
-    const gridEnemy = document.getElementById('gridEnemy');
-    clearContainer(gridAlly); clearContainer(gridEnemy);
-
+    // 3) ONNX 추론
+    await progress.step('모델 로드', 5, async ()=>{ await loadTroopModel(); });
+    // 기존 inferTroopsFromMats 호출은 detectAndRecognize 내부의 patch 수집 결과를 써야합니다.
+    // (패치 보드는 노출을 없앴지만, 내부 로직은 동일)
     const allyKeys = [], allyMats = [];
     const enemyKeys = [], enemyMats = [];
     for (let i=0;i<7;i++){
       for (let j=0;j<7;j++){
         const key = idKey(i,j);
         const A = res.troopsAlly[key], E = res.troopsEnemy[key];
-
-        // Ally cell
-        const ca = makeCellCanvas(key); gridAlly.appendChild(ca.wrap);
-        if (A){ ca.canvas.width=A.cols; ca.canvas.height=A.rows; canvasFromMat(A, ca.canvas); allyKeys.push(key); allyMats.push(A); }
-
-        // Enemy cell
-        const ce = makeCellCanvas(key); gridEnemy.appendChild(ce.wrap);
-        if (E){ ce.canvas.width=E.cols; ce.canvas.height=E.rows; canvasFromMat(E, ce.canvas); enemyKeys.push(key); enemyMats.push(E); }
+        if (A){ allyKeys.push(key); allyMats.push(A); }
+        if (E){ enemyKeys.push(key); enemyMats.push(E); }
       }
     }
-    // 영웅 보드 (표시만)
-    const heroAlly = document.getElementById('heroAlly');
-    const heroEnemy = document.getElementById('heroEnemy');
-    clearContainer(heroAlly); clearContainer(heroEnemy);
-    for (let k of ['0','1','2']){
-      const HA = res.heroesAlly[k], HE = res.heroesEnemy[k];
-      const ca = makeCellCanvas(`H${k}`); heroAlly.appendChild(ca.wrap);
-      const ce = makeCellCanvas(`H${k}`); heroEnemy.appendChild(ce.wrap);
-      if (HA){ ca.canvas.width=HA.cols; ca.canvas.height=HA.rows; canvasFromMat(HA, ca.canvas); HA.delete(); }
-      if (HE){ ce.canvas.width=HE.cols; ce.canvas.height=HE.rows; canvasFromMat(HE, ce.canvas); HE.delete(); }
-    }
+    const allyRes  = await progress.step('아군 추론', 3, async ()=> await inferTroopsFromMats(allyMats));
+    const enemyRes = await progress.step('적군 추론', 3, async ()=> await inferTroopsFromMats(enemyMats));
 
-    // 3) Troop 모델 로드 + 추론
-    await progress.step('모델 로드', 5, async ()=>{ await loadTroopModel(); });
-    const allyRes  = await progress.step('Ally 추론', 3, async ()=> await inferTroopsFromMats(allyMats) );
-    const enemyRes = await progress.step('Enemy 추론', 3, async ()=> await inferTroopsFromMats(enemyMats) );
-
-    // 4) 레이아웃 복원
-    const troopLayoutAlly = {}; const probsAlly = {};
+    // 4) JSON 구성
+    const troopLayoutAlly = {}, probsAlly = {};
     for (let i=0;i<allyKeys.length;i++){ troopLayoutAlly[allyKeys[i]] = Number(allyRes[i].label); probsAlly[allyKeys[i]] = Number(allyRes[i].prob.toFixed(6)); }
-    const troopLayoutEnemy = {}; const probsEnemy = {};
+    const troopLayoutEnemy = {}, probsEnemy = {};
     for (let i=0;i<enemyKeys.length;i++){ troopLayoutEnemy[enemyKeys[i]] = Number(enemyRes[i].label); probsEnemy[enemyKeys[i]] = Number(enemyRes[i].prob.toFixed(6)); }
-
-    // 메모리 정리(추론용 패치들)
     allyMats.forEach(m=>m.delete()); enemyMats.forEach(m=>m.delete());
 
-    // 5) JSON 구성 + Base64 출력
-    const ally_json = {
-      GameMode: 0,
-      troopLayout: troopLayoutAlly,
-      heroLayout: {},
-      armyLayout: null,
-      meta: { probs: probsAlly }
-    };
-    const enemy_json = {
-      GameMode: 0,
-      troopLayout: troopLayoutEnemy,
-      heroLayout: {},
-      armyLayout: null,
-      meta: { probs: probsEnemy }
-    };
+    const ally_json = { GameMode: 0, troopLayout: troopLayoutAlly, heroLayout: {}, armyLayout: null, meta: { probs: probsAlly } };
+    const enemy_json = { GameMode: 0, troopLayout: troopLayoutEnemy, heroLayout: {}, armyLayout: null, meta: { probs: probsEnemy } };
 
+    // 5) 반죽(Base64) 및 JSON 채우기
     const allyStr  = JSON.stringify(ally_json);
     const enemyStr = JSON.stringify(enemy_json);
     document.getElementById('allyJson').value  = allyStr;
     document.getElementById('enemyJson').value = enemyStr;
 
+    const allyB64 = btoa(unescape(encodeURIComponent(allyStr)));
+    const enemyB64 = btoa(unescape(encodeURIComponent(enemyStr)));
+    document.getElementById('allyB64').value  = allyB64;
+    document.getElementById('enemyB64').value = enemyB64;
+
+    // 상태/포커스
     progress.finish(true, res.corners ? '완료' : '코너 미검출');
     st.textContent = res.corners ? '완료' : '코너를 찾지 못했습니다';
-  }catch(err){
+    document.getElementById('allyB64').focus();
+  } catch (err) {
     console.error(err);
-    alert('오류가 발생했습니다: '+(err && err.message ? err.message : err));
+    alert('오류가 발생했습니다: ' + (err?.message || err));
     progress.finish(false, '에러');
-    st.textContent='에러';
-  }finally{ runBtn.disabled=false; }
+    st.textContent = '에러';
+  } finally {
+    runBtn.disabled = false;
+  }
 });
 </script>
 </body>
