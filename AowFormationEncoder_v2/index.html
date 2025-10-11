@@ -271,45 +271,47 @@ function percentileGray(mat, perc){
   images.delete(); mask.delete(); hist.delete(); return thr|0;
 }
 
-/* ======== EDT 기반 이진 모폴로지 ======== */
-// mask: CV_8U {0,255}, radiusPx: 대략 반경(px)
-function fastDilateBinary(mask, radiusPx){
+function fastDilateBinary(mask, kSize=3){
+  const r = Math.max(1, Math.floor(kSize/2));
   let inv = new cv.Mat(); cv.bitwise_not(mask, inv);
   let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
   inv.delete();
-  let out = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY_INV);
-  dist.delete();
-  let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
-  return u8; // CV_8U {0,255}
-}
-// Erosion: foreground까지의 거리 > r 인 픽셀만 유지
-function fastErodeBinary(mask, radiusPx){
-  let dist = new cv.Mat(); cv.distanceTransform(mask, dist, cv.DIST_L2, 3);
-  let out  = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY);
+  let out = new cv.Mat(); cv.threshold(dist, out, r, 255, cv.THRESH_BINARY_INV);
   dist.delete();
   let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
   return u8;
 }
-function fastOpenBinary(mask, radiusPx){
-  const er = fastErodeBinary(mask, radiusPx);
-  const di = fastDilateBinary(er,  radiusPx);
+
+function fastErodeBinary(mask, kSize=3){
+  const r = Math.max(1, Math.floor(kSize/2));
+  let dist = new cv.Mat(); cv.distanceTransform(mask, dist, cv.DIST_L2, 3);
+  let out  = new cv.Mat(); cv.threshold(dist, out, r, 255, cv.THRESH_BINARY);
+  dist.delete();
+  let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
+  return u8;
+}
+
+function fastOpenBinary(mask, kSize=3){
+  const er = fastErodeBinary(mask, kSize);
+  const di = fastDilateBinary(er,  kSize);
   er.delete();
   return di;
 }
-function fastCloseBinary(mask, radiusPx){
-  const di = fastDilateBinary(mask, radiusPx);
-  const er = fastErodeBinary(di,  radiusPx);
+
+function fastCloseBinary(mask, kSize=3){
+  const di = fastDilateBinary(mask, kSize);
+  const er = fastErodeBinary(di,  kSize);
   di.delete();
   return er;
 }
 
-/* ===== 모폴로지 (자동 디스패치: Binary+큰 r이면 EDT 사용) ===== */
+/* ===== 모폴로지 디스패처 (입력은 kSize 통일) ===== */
 function morph(mat, op, kSize=3, iters=1){
-  const r = Math.max(1, Math.floor(kSize/2));
-  if(op==='dilate') return fastDilateBinary(mat, r);
-  if(op==='erode')  return fastErodeBinary(mat,  r);
-  if(op==='open')   return fastOpenBinary(mat,   r);
-  if(op==='close')  return fastCloseBinary(mat,  r);
+  if(op==='dilate') return fastDilateBinary(mat, kSize);
+  if(op==='erode')  return fastErodeBinary(mat,  kSize);
+  if(op==='open')   return fastOpenBinary(mat,   kSize);
+  if(op==='close')  return fastCloseBinary(mat,  kSize);
+  throw new Error(`Unknown morph op: ${op}`);
 }
 
 function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
@@ -608,15 +610,13 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const ksize = (Math.max(H, W) / 200) | 0;
     const bmask75 = brightnessMask(gray, 75);
 
-    const flatRadius = Math.max(2 * ksize, 1);
-    alert(ksize)
-    alert(flatRadius)
-    const flatDil2 = fastDilateBinary(flatRefined, flatRadius);
+    const flatKsize = Math.max(2 * ksize, 1);
+    const flatDil2 = fastDilateBinary(flatRefined, flatKsize);
     let flatNei2 = new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
     dbg.push(['flat_neighbor', flatNei2.clone()]);
 
-    const bmaskRadius = Math.max(6 * ksize, 1);
-    const bmaskDil = fastDilateBinary(bmask75, bmaskRadius);
+    const bmaskKsize = Math.max(6 * ksize, 1);
+    const bmaskDil = fastDilateBinary(bmask75, bmaskKsize);
 
     let eRef = new cv.Mat(); cv.bitwise_and(flatNei2, bmaskDil, eRef);
     flatNei2.delete(); bmaskDil.delete();
