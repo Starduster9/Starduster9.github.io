@@ -301,10 +301,12 @@ function polygonArea(pts){
   return Math.abs(0.5*s);
 }
 function orderCornersTLTRBRBL(pts){
-  const arr=pts.map(p=>({p, s:p[0]+p[1], d:p[0]-p[1]}));
-  const tl=arr.reduce((a,b)=>a.s<b.s?a:b).p, br=arr.reduce((a,b)=>a.s>b.s?a:b).p;
-  const tr=arr.reduce((a,b)=>a.d<b.d?a:b).p, bl=arr.reduce((a,b)=>a.d>b.d?a:b).p;
-  return [tl,tr,br,bl];
+  const arr = pts.map(p => ({ p, s: p[0] + p[1], d: p[0] - p[1] }));
+  const tl = arr.reduce((a,b) => a.s < b.s ? a : b).p; // x+y 최소
+  const br = arr.reduce((a,b) => a.s > b.s ? a : b).p; // x+y 최대
+  const tr = arr.reduce((a,b) => a.d > b.d ? a : b).p; // (x - y) 최대  ← 반전 포인트!
+  const bl = arr.reduce((a,b) => a.d < b.d ? a : b).p; // (x - y) 최소  ← 반전 포인트!
+  return [tl, tr, br, bl];
 }
 function normalizeForView(mat32f){
   const mm=cv.minMaxLoc(mat32f); const maxv=(mm && typeof mm.maxVal==='number')? mm.maxVal : 0;
