@@ -1,4 +1,4 @@
-import { matFromImage, canvasFromMat, makeDbgSlot } from './cv-utils.js';
+import { isCvReady, setStatus, loadImageToMat, canvasFromMat, makeDbgSlot } from './cv-utils.js';
 import { Progress } from './progress.js';
 import { detectAndRecognize } from './pipeline.js';
 
@@ -13,28 +13,51 @@ function makeCellCanvas(title){
 
 export function initUI(){
   const fileInput=document.getElementById('file');
-  let src=null;
+  const runBtn=document.getElementById('run');
+  let src=null; // cv.Mat (RGB, 8UC3)
 
-  fileInput.addEventListener('change', e=>{
-    const f=e.target.files[0]; if(!f) return;
-    const img=new Image();
-    img.onload=()=>{
-      if (src) src.delete();
-      src=matFromImage(img);
-      const c=document.getElementById('cOrig'); c.width=src.cols; c.height=src.rows; canvasFromMat(src,c);
-      // === 보강: 업로드 직후에도 런타임 준비 상태면 버튼 해제 ===
-      const runBtn=document.getElementById('run');
-      if (window.cv && cv.Mat && runBtn) runBtn.disabled=false;
-    };
-    img.src=URL.createObjectURL(f);
+  // 파일 업로드 → 안전 경로로 Mat 만들기 + 미리보기
+  fileInput.addEventListener('change', async (e)=>{
+    const f=e.target.files && e.target.files[0];
+    if(!f) return;
+    try{
+      if (!isCvReady()){
+        setStatus('OpenCV 준비 전 – 잠시 후 다시 시도');
+        return;
+      }
+      // 이전 Mat 정리
+      if (src) { try { src.delete(); } catch(_) {} src = null; }
+
+      setStatus('이미지 읽는 중…');
+      src = await loadImageToMat(f);
+
+      const c=document.getElementById('cOrig');
+      c.width = src.cols; c.height = src.rows;
+      canvasFromMat(src, c);
+
+      // OpenCV 준비되어 있으면 실행 버튼 해제
+      if (isCvReady()) runBtn.disabled = false;
+      setStatus('이미지 로드 완료');
+    }catch(err){
+      console.error(err);
+      setStatus('이미지 로드 실패');
+      alert('이미지 로드 실패: ' + (err && err.message ? err.message : err));
+    }
   });
 
-  document.getElementById('run').addEventListener('click', async ()=>{
-    const runBtn=document.getElementById('run'); const st=document.getElementById('status');
-    if (!window.cv || !cv.Mat){ alert('OpenCV 초기화 전입니다. 잠시 후 다시 시도하세요.'); return; }
-    if (!src){ alert('이미지를 선택하세요.'); return; }
-    runBtn.disabled=true; st.textContent='실행 중…';
+  // 실행
+  runBtn.addEventListener('click', async ()=>{
+    if (!isCvReady()){
+      alert('OpenCV 초기화 전입니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+    if (!src){
+      alert('이미지를 선택하세요.');
+      return;
+    }
 
+    runBtn.disabled = true;
+    setStatus('실행 중…');
     const progress = new Progress();
 
     try{
@@ -55,12 +78,26 @@ export function initUI(){
       }
       for (let i = 0; i < res.dbg.length; i++) {
         const [title, mat] = res.dbg[i]; if (title === 'cluster') continue;
-        const { wrap, canvas } = makeDbgSlot(title); grid.appendChild(wrap); canvas.width = mat.cols; canvas.height = mat.rows; canvasFromMat(mat, canvas); mat.delete();
+        const { wrap, canvas } = makeDbgSlot(title);
+        grid.appendChild(wrap);
+        canvas.width = mat.cols; canvas.height = mat.rows;
+        canvasFromMat(mat, canvas);
+        mat.delete();
       }
       if (idxCluster >= 0) res.dbg[idxCluster][1].delete();
 
-      if (res.ally){ const cA=document.getElementById('cAlly'); cA.width=res.ally.cols; cA.height=res.ally.rows; canvasFromMat(res.ally,cA); res.ally.delete(); }
-      if (res.enemy){ const cE=document.getElementById('cEnemy'); cE.width=res.enemy.cols; cE.height=res.enemy.rows; canvasFromMat(res.enemy,cE); res.enemy.delete(); }
+      if (res.ally){
+        const cA=document.getElementById('cAlly');
+        cA.width=res.ally.cols; cA.height=res.ally.rows;
+        canvasFromMat(res.ally,cA);
+        res.ally.delete();
+      }
+      if (res.enemy){
+        const cE=document.getElementById('cEnemy');
+        cE.width=res.enemy.cols; cE.height=res.enemy.rows;
+        canvasFromMat(res.enemy,cE);
+        res.enemy.delete();
+      }
 
       const gridAlly = document.getElementById('gridAlly');
       const gridEnemy = document.getElementById('gridEnemy');
@@ -90,10 +127,14 @@ export function initUI(){
       }
 
       progress.finish(true, res.corners ? '완료' : '코너 미검출');
-      st.textContent = res.corners ? '완료' : '코너를 찾지 못했습니다';
+      setStatus(res.corners ? '완료' : '코너를 찾지 못했습니다');
     }catch(err){
-      console.error(err); alert('오류가 발생했습니다: '+(err && err.message ? err.message : err));
-      progress.finish(false, '에러'); st.textContent='에러';
-    }finally{ runBtn.disabled=false; }
+      console.error(err);
+      alert('실행 중 오류: ' + (err && err.message ? err.message : err));
+      setStatus('에러');
+      try { progress.finish(false, '에러'); } catch(_) {}
+    }finally{
+      runBtn.disabled = false;
+    }
   });
 }
