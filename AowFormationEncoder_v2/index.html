@@ -247,8 +247,48 @@ function percentileGray(mat, perc){
   images.delete(); mask.delete(); hist.delete(); return thr|0;
 }
 
-/* ===== 모폴로지 ===== */
+/* ======== EDT 기반 이진 모폴로지 ======== */
+// mask: CV_8U {0,255}, radiusPx: 대략 반경(px)
+function fastDilateBinary(mask, radiusPx){
+  let inv = new cv.Mat(); cv.bitwise_not(mask, inv);
+  let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
+  inv.delete();
+  let out = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY_INV);
+  dist.delete();
+  let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
+  return u8; // CV_8U {0,255}
+}
+// Erosion: foreground까지의 거리 > r 인 픽셀만 유지
+function fastErodeBinary(mask, radiusPx){
+  let dist = new cv.Mat(); cv.distanceTransform(mask, dist, cv.DIST_L2, 3);
+  let out  = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY);
+  dist.delete();
+  let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
+  return u8;
+}
+function fastOpenBinary(mask, radiusPx){
+  const er = fastErodeBinary(mask, radiusPx);
+  const di = fastDilateBinary(er,  radiusPx);
+  er.delete();
+  return di;
+}
+function fastCloseBinary(mask, radiusPx){
+  const di = fastDilateBinary(mask, radiusPx);
+  const er = fastErodeBinary(di,  radiusPx);
+  di.delete();
+  return er;
+}
+
+/* ===== 모폴로지 (자동 디스패치: Binary+큰 r이면 EDT 사용) ===== */
 function morph(mat, op, kSize=3, iters=1){
+  const isBinaryU8 = (mat.type() === cv.CV_8U);
+  const r = Math.max(1, Math.floor(kSize/2));
+  if (isBinaryU8 && r >= 3){
+    if(op==='dilate') return fastDilateBinary(mat, r);
+    if(op==='erode')  return fastErodeBinary(mat,  r);
+    if(op==='open')   return fastOpenBinary(mat,   r);
+    if(op==='close')  return fastCloseBinary(mat,  r);
+  }
   const kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE,new cv.Size(kSize,kSize));
   let out=new cv.Mat();
   if(op==='close') cv.morphologyEx(mat,out,cv.MORPH_CLOSE,kernel,new cv.Point(-1,-1),iters);
@@ -257,14 +297,15 @@ function morph(mat, op, kSize=3, iters=1){
   else if(op==='erode') cv.erode(mat,out,kernel,new cv.Point(-1,-1),iters);
   kernel.delete(); return out;
 }
+
 function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
 
 /* ===== 라벨 기반 마스크 재구성(고속, 단일 패스) ===== */
 function maskFromLabelsSet(labels, keepSet){
   const rows=labels.rows, cols=labels.cols, N=rows*cols;
-  const L = labels.data32S; // Int32Array
+  const L = labels.data32S;
   let out = new cv.Mat.zeros(rows, cols, cv.CV_8U);
-  const M = out.data; // Uint8Array
+  const M = out.data;
   for (let i=0;i<N;i++){
     const v = L[i];
     if (v>=1 && keepSet.has(v)) M[i]=255;
@@ -272,7 +313,7 @@ function maskFromLabelsSet(labels, keepSet){
   return out;
 }
 
-/* ===== 작은/얇은 성분 제거 (JS 이중루프 제거) ===== */
+/* ===== 작은/얇은 성분 제거 ===== */
 function removeSmallComponents(mask, minArea=100, area_w_wh=false){
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
   const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
@@ -300,7 +341,7 @@ function removeThinComponents(mask, minArea=100){
   return cleaned;
 }
 
-/* ===== 선 샘플링 (LineIterator 없이, DDA + TypedArray) ===== */
+/* ===== 선 샘플링(DDA) ===== */
 function sampleLineVals(mat, line){
   let [x1,y1,x2,y2]=line.map(v=>Math.round(v));
   const cols=mat.cols, rows=mat.rows;
@@ -329,19 +370,7 @@ function sampleLineVals(mat, line){
   return { vals };
 }
 
-/* ======== 빠른 이진 팽창: distance transform 임계 ======== */
-// mask: CV_8U {0,255}, radiusPx: 대략 반경(px)
-function fastDilateBinary(mask, radiusPx){
-  let inv = new cv.Mat(); cv.bitwise_not(mask, inv);               // 배경 기준
-  let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
-  inv.delete();
-  let out = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY_INV);
-  dist.delete();
-  let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
-  return u8; // CV_8U {0,255}
-}
-
-/* ======== 교차 라벨 생성 ======== */
+/* ===== 교차 라벨 생성: 전수 비교(O(N^2)) ===== */
 function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const [H, W] = imgShape;
   const N = lines.length | 0;
@@ -349,7 +378,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const angleThr = (angleDeg * Math.PI/180) || (30 * Math.PI/180);
   const r = Math.max(1, brushSize | 0);
 
-  // 빠른 접근용 헬퍼
   function ang(l){ return Math.atan2(l[3]-l[1], l[2]-l[0]); }
   function intersect(l1,l2){
     const [x1,y1,x2,y2]=l1, [x3,y3,x4,y4]=l2;
@@ -358,48 +386,33 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
     const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/den;
     return [x1 + t*(x2-x1), y1 + t*(y2-y1)];
   }
-
-  // 마스크 준비
   const mask = new cv.Mat.zeros(H, W, cv.CV_8U);
-
-  // 각도 미리 계산 (조금이라도 절약)
   const angles = new Array(N);
   for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
 
   let pairsTried = 0, dotsPainted = 0;
 
   for (let i=0;i<N;i++){
-    const ai = angles[i];
-    const li = lines[i];
+    const ai = angles[i], li = lines[i];
     for (let j=i+1;j<N;j++){
-      // 각도 필터
-      let d = Math.abs(ai - angles[j]);
-      if (d > Math.PI) d = 2*Math.PI - d;
+      let d = Math.abs(ai - angles[j]); if (d > Math.PI) d = 2*Math.PI - d;
       if (d + 1e-9 < angleThr) continue;
-
-      const P = intersect(li, lines[j]);
-      if (!P) continue;
+      const P = intersect(li, lines[j]); if (!P) continue;
       const x = P[0] | 0, y = P[1] | 0;
       if (x<0 || x>=W || y<0 || y>=H) { pairsTried++; continue; }
-
-      // ellipse 대신 circle (더 빠름)
       cv.circle(mask, new cv.Point(x,y), r, new cv.Scalar(255,255,255,255), -1);
       dotsPainted++; pairsTried++;
     }
   }
-
-  // 라벨링
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
   const n = cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
   mask.delete(); stats.delete(); cents.delete();
 
-  // (선택) 진행 로그 찍기
   if (typeof progress!=='undefined' && progress && typeof progress._log==='function'){
     progress._log(`    • pairwise tried: ${pairsTried}`);
     progress._log(`    • painted dots: ${dotsPainted}`);
     progress._log(`    • components: ${Math.max(n-1,0)}`);
   }
-
   return { count: Math.max(n-1,0), labels };
 }
 
@@ -517,15 +530,15 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const e_close=morph(e_log,'close',3,1);
     let flat=new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
     const minAreaThin=(H*W/2000)|0; let flat2=removeThinComponents(flat, minAreaThin); flat.delete();
-    const ksize=(Math.max(H,W)/200)|0; // 약하게(연산량↓)
-    const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1);
+    const ksize=(Math.max(H,W)/200)|0;
+    const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1); // 자동 EDT
     let flatNei=new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
     const bmask75=brightnessMask(gray,75);
     let invB=new cv.Mat(); cv.bitwise_not(bmask75, invB); let flatNeiDark=new cv.Mat(); cv.bitwise_and(flatNei, invB, flatNeiDark); invB.delete();
     let flat3=new cv.Mat(); cv.bitwise_or(flat2, flatNeiDark, flat3); flatNeiDark.delete(); flat2.delete();
     const flatClean=removeThinComponents(flat3, (H*W/50)|0); flat3.delete();
 
-    // top2 라벨만 유지(단일 패스)
+    // top2 라벨만 유지
     let invFlat=new cv.Mat(); cv.bitwise_not(flatClean, invFlat);
     let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
     const ncc=cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
@@ -550,7 +563,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const bmask75 = brightnessMask(gray, 75);
     log('brightnessMask(75)', t);
   
-    // === patch 1: 느린 dilate → fastDilateBinary 로 대체 ===
+    // 빠른 dilate
     t = performance.now();
     const flatRadius = Math.max(2 * ksize, 1);
     const flatDil2 = fastDilateBinary(flatRefined, flatRadius);
@@ -565,7 +578,6 @@ async function detectAndRecognize(imgRGB, opts, progress){
     dbg.push(['flat_neighbor', flatNei2.clone()]);
     log('dbg.clone(flat_neighbor)', t);
   
-    // === patch 1: bmask75 확장도 fastDilateBinary 적용 ===
     t = performance.now();
     const bmaskRadius = Math.max(6 * ksize, 1);
     const bmaskDil = fastDilateBinary(bmask75, bmaskRadius);
@@ -577,7 +589,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     flatNei2.delete(); bmaskDil.delete();
   
     t = performance.now();
-    eRef = morph(eRef, 'open', Math.max((ksize / 2) | 0, 1), 1);
+    eRef = morph(eRef, 'open', Math.max((ksize / 2) | 0, 1), 1); // 자동 EDT
     log('morph(open, eRef)', t);
   
     t = performance.now();
@@ -591,7 +603,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     dbg.push(['log_refined', eRef2.clone()]);
     log('bitwise_and(eRefClean, bmask75) + dbg.clone', t);
   
-    // 다운스케일 Hough
+    // 다운스케일 비활성(정확도 유지). 필요하면 scale=0.5 사용
     const scale = 1.0;
     t = performance.now();
     let small = new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
@@ -622,7 +634,6 @@ async function detectAndRecognize(imgRGB, opts, progress){
     dbg.push(['hough', drawLinesOn(imgRGB, lines, [255,128,0], 2)]);
     log('dbg(hough lines render)', t);
   
-    // === patch 2: 교차 라벨링 고속화(버킷팅 + circle) ===
     t = performance.now();
     const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W]);
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
