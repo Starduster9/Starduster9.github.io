@@ -62,7 +62,7 @@ button{
   appearance:none;
   border:1px solid var(--line);
   background:#ffffff;
-  color:var(--text);
+  color:#var(--text);
   padding:14px 18px;
   border-radius:14px;
   cursor:pointer;
@@ -125,7 +125,8 @@ canvas, .thumb{
   border:2px solid #dbe2f1;
   background:#fbfdff
 }
-.thumb{height:240px; object-fit:contain; display:none}
+/* ★ display:none 제거 */
+.thumb{height:240px; object-fit:contain}
 
 /* 상태 텍스트 색 */
 .status{font-size:18px; margin-top:6px}
@@ -150,7 +151,7 @@ summary{cursor:pointer; color:#1d4ed8}
   @keyframes fade{from{opacity:0; transform:translateY(2px)} to{opacity:1; transform:none}}
 }
 
-/* 다크 모드 보정(선택 사항) */
+/* 다크 모드 보정 */
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0f172a; --card:#111827; --line:#1f2a44; --text:#eef2ff; --muted:#93a4c7; --accent:#60a5fa;
