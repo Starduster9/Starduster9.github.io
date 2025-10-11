@@ -576,7 +576,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     let flat2 = removeThinComponents(flat, minAreaThin); flat.delete();
 
     const ksize = (Math.max(H,W)/200)|0;
-    alert(ksize)
+    alert(H, W, ksize)
     const flatDil = morph(flat2,'dilate',Math.max(1,ksize),1);
     let flatNei = new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
 
