@@ -668,7 +668,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     log('dbg(hough lines render)', t);
   
     t = performance.now();
-    const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W]);
+    const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W], progress);
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
     log('countIntersectionsByPaint + dbg(labelToColor)', t);
   
