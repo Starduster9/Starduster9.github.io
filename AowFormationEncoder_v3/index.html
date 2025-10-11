@@ -4,10 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Formation Detector – OpenCV.js (fast + progress)</title>
-  <!-- ZIP 구조에 맞춰 경로 지정 -->
+
+  <!-- CSS: ZIP 구조에 맞춰 상대경로 -->
   <link rel="stylesheet" href="css/style.css" />
-  <!-- OpenCV 로더 (CDN 시도 + onCvReady) -->
+
+  <!-- onCvReady 인라인 백업: 로더/모듈 로딩 타이밍 경합 시에도 버튼을 풀어줌 -->
+  <script>
+    window.onCvReady = function () {
+      const st = document.getElementById('status');
+      if (st) st.textContent = '준비 완료';
+      const runEl = document.getElementById('run');
+      if (runEl) runEl.disabled = false;
+      // 모듈에서도 후속 처리 가능하도록 커스텀 이벤트 발행
+      try { window.dispatchEvent(new CustomEvent('cv-ready')); } catch(_) {}
+    };
+  </script>
+
+  <!-- OpenCV 로더(두 개 CDN 순차시도 + onRuntimeInitialized에서 onCvReady 호출) -->
   <script defer src="js/opencv-loader.js"></script>
+
   <!-- 앱 엔트리 (ESM) -->
   <script type="module" defer src="js/main.js"></script>
 </head>
