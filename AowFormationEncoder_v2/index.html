@@ -45,21 +45,19 @@ footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
 (function(){
   var statusEl=null;
   function setStatus(t){ if(!statusEl)statusEl=document.getElementById('status'); if(statusEl)statusEl.textContent=t; }
-  window.onOpenCvLoaded = function () {
-  if (typeof cv !== 'undefined') {
-    cv['onRuntimeInitialized'] = function () {
-      console.log('OpenCV.js runtime initialized');
-      if (typeof onCvReady === 'function') onCvReady();
-    };
-    // ✅ 이미 초기화돼 있는 경우도 대비
-    if (cv.Mat) {
-      console.log('OpenCV.js Mat already defined → manual init');
-      if (typeof onCvReady === 'function') onCvReady();
+  window.onOpenCvLoaded=function(){
+    if (typeof cv !== 'undefined') {
+      if (cv['onRuntimeInitialized']) {
+        // 이미 초기화 완료된 경우 즉시 실행
+        if (typeof onCvReady === 'function') onCvReady();
+      } else {
+        // 초기화 콜백 등록
+        cv['onRuntimeInitialized'] = function(){
+          if (typeof onCvReady === 'function') onCvReady();
+        };
+      }
     }
-  } else {
-    console.warn('cv undefined');
-  }
-};
+  };
   var urls=['https://docs.opencv.org/4.10.0/opencv.js','https://cdn.jsdelivr.net/npm/opencv.js@4.10.0/dist/opencv.js'];
   var i=0;
   function loadNext(){
