@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Formation Detector – OpenCV.js (no jsnetworkx)</title>
+<title>Formation Detector – OpenCV.js (no external graph lib)</title>
 <style>
 :root{--bg:#0b0d10;--card:#12161b;--ink:#e6edf3;--muted:#9aa7b5;--accent:#5b9cff}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Apple SD Gothic Neo,Malgun Gothic,sans-serif}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Apple SD Gothic Neo,Malgun Gothic,sans-serif}
 header{display:flex;gap:12px;align-items:center;padding:16px 20px;border-bottom:1px solid #1e242c}
 header h1{font-size:16px;margin:0;letter-spacing:.2px}
 .badge{padding:2px 8px;border-radius:999px;background:#1a2330;border:1px solid #2a3442;color:var(--muted)}
@@ -55,7 +55,7 @@ footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
 <body>
 <header>
   <h1>Formation Detector (OpenCV.js)</h1>
-  <span class="badge">LoG → Morph → HoughP → Intersections → Graph 4-cycles</span>
+  <span class="badge">LoG → Morph → HoughP → Intersections → Quad</span>
 </header>
 
 <main>
@@ -96,7 +96,7 @@ footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
 <footer>브라우저 환경에 맞춰 일부 세부 로직이 간소화되어 있습니다.</footer>
 
 <script>
-// ======= 의존성 없는 MiniGraph + 4-사이클 탐색 =======
+// ======= 간단 그래프 + 4-사이클 탐색 (외부 의존성 없음) =======
 (function(){
   function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
   class MiniGraph{
@@ -463,21 +463,43 @@ document.getElementById('run').addEventListener('click', async ()=>{
 
     const res=await detectAndRecognize(srcMat, {angleDeg,brush,sizeFull,sizePatch});
 
-    const grid=document.getElementById('dbgGrid'); grid.innerHTML='';
-    for (const [title, mat] of res.dbg){
-      const {wrap, canvas}=makeDbgSlot(title); grid.appendChild(wrap);
-      canvas.width=mat.cols; canvas.height=mat.rows; canvasFromMat(mat,canvas); mat.delete();
-    }
-    const dbgFinal=res.dbg.find(d=>d[0]==='cluster');
-    if (dbgFinal){ const c=document.getElementById('cDebug'); c.width=dbgFinal[1].cols; c.height=dbgFinal[1].rows; canvasFromMat(dbgFinal[1], c); dbgFinal[1].delete(); }
+    // ===== Mat 삭제 순서 문제 방지: 'cluster' 먼저 별도 출력, 이후 그리드, 마지막에 cluster delete =====
+    const grid=document.getElementById('dbgGrid');
+    grid.innerHTML='';
 
+    // 1) cluster 먼저 출력 (여기선 delete 하지 않음)
+    const idxCluster = res.dbg.findIndex(d => d[0] === 'cluster');
+    if (idxCluster >= 0) {
+      const m = res.dbg[idxCluster][1];
+      const c = document.getElementById('cDebug');
+      c.width = m.cols; c.height = m.rows;
+      canvasFromMat(m, c);
+    }
+
+    // 2) 나머지 디버그 이미지 출력 + 즉시 delete
+    for (let i = 0; i < res.dbg.length; i++) {
+      const [title, mat] = res.dbg[i];
+      if (title === 'cluster') continue; // 이미 출력함
+      const { wrap, canvas } = makeDbgSlot(title);
+      grid.appendChild(wrap);
+      canvas.width = mat.cols; canvas.height = mat.rows;
+      canvasFromMat(mat, canvas);
+      mat.delete(); // 이 시점에 삭제
+    }
+
+    // 3) 마지막에 cluster Mat도 정리
+    if (idxCluster >= 0) {
+      res.dbg[idxCluster][1].delete();
+    }
+
+    // ally/enemy 출력 후 즉시 delete
     if (res.ally){ const cA=document.getElementById('cAlly'); cA.width=res.ally.cols; cA.height=res.ally.rows; canvasFromMat(res.ally,cA); res.ally.delete(); }
     if (res.enemy){ const cE=document.getElementById('cEnemy'); cE.width=res.enemy.cols; cE.height=res.enemy.rows; canvasFromMat(res.enemy,cE); res.enemy.delete(); }
 
     st.textContent = res.corners ? '완료' : '코너를 찾지 못했습니다';
   }catch(err){
     console.error(err);
-    alert('오류가 발생했습니다: '+err.message);
+    alert('오류가 발생했습니다: '+(err && err.message ? err.message : err));
     st.textContent='에러';
   }finally{ runBtn.disabled=false; }
 });
