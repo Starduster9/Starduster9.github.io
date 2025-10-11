@@ -1,67 +1,88 @@
-
 <!DOCTYPE html>
-<input id="sizePatch" type="number" value="32" min="8" max="512" />
-<label for="angleDeg">교차 각 임계(angle_deg)</label>
-<input id="angleDeg" type="number" value="45" min="0" max="90" />
-<label for="brush">브러시 반경(px)</label>
-<input id="brush" type="number" value="5" min="1" max="40" />
-</div>
-<div class="row">
-<button id="run" class="btn" disabled>실행</button>
-<span class="note" id="status">OpenCV.js 초기화 대기중…</span>
-</div>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formation Detector – OpenCV.js (fast + progress)</title>
+  <!-- ZIP 구조에 맞춰 경로 지정 -->
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- OpenCV 로더 (CDN 시도 + onCvReady) -->
+  <script defer src="js/opencv-loader.js"></script>
+  <!-- 앱 엔트리 (ESM) -->
+  <script type="module" defer src="js/main.js"></script>
+</head>
 
+<body>
+<header>
+  <h1>Formation Detector (OpenCV.js)</h1>
+  <span class="badge">LoG → Morph → HoughP → Intersections → Quad</span>
+</header>
 
-<!-- Progress Card -->
-<div class="progress-card">
-<div class="progress-bar"><span id="bar"></span></div>
-<div class="progress-head">
-<span class="step" id="stepText">대기 중</span>
-<span class="pct" id="pctText">0%</span>
-<span class="elapsed" id="elapsed">경과 0.0s</span>
-</div>
-<details>
-<summary style="cursor:pointer;margin-top:6px;color:var(--muted)">세부 로그</summary>
-<div class="logs"><pre id="log"></pre></div>
-</details>
-</div>
-</section>
+<main>
+  <section class="panel" id="controls">
+    <h2>입력 & 설정</h2>
+    <div class="row"><input id="file" type="file" accept="image/*" /></div>
+    <div class="kv">
+      <label for="sizeFull">size_full</label>
+      <input id="sizeFull" type="number" value="1024" min="256" max="4096" />
+      <label for="sizePatch">size_patch</label>
+      <input id="sizePatch" type="number" value="32" min="8" max="512" />
+      <label for="angleDeg">교차 각 임계(angle_deg)</label>
+      <input id="angleDeg" type="number" value="45" min="0" max="90" />
+      <label for="brush">브러시 반경(px)</label>
+      <input id="brush" type="number" value="5" min="1" max="40" />
+    </div>
+    <div class="row">
+      <button id="run" class="btn" disabled>실행</button>
+      <span class="note" id="status">OpenCV.js 초기화 대기중…</span>
+    </div>
 
+    <!-- Progress Card -->
+    <div class="progress-card">
+      <div class="progress-bar"><span id="bar"></span></div>
+      <div class="progress-head">
+        <span class="step" id="stepText">대기 중</span>
+        <span class="pct" id="pctText">0%</span>
+        <span class="elapsed" id="elapsed">경과 0.0s</span>
+      </div>
+      <details>
+        <summary style="cursor:pointer;margin-top:6px;color:var(--muted)">세부 로그</summary>
+        <div class="logs"><pre id="log"></pre></div>
+      </details>
+    </div>
+  </section>
 
-<section class="panel">
-<h2>결과</h2>
-<div class="split">
-<div class="slot"><h3>원본</h3><canvas id="cOrig"></canvas></div>
-<div class="slot"><h3>탐지 결과(라인/클러스터)</h3><canvas id="cDebug"></canvas></div>
-</div>
-<div class="split" style="margin-top:12px">
-<div class="slot"><h3>Ally (워프)</h3><canvas id="cAlly"></canvas></div>
-<div class="slot"><h3>Enemy (워프)</h3><canvas id="cEnemy"></canvas></div>
-</div>
+  <section class="panel">
+    <h2>결과</h2>
+    <div class="split">
+      <div class="slot"><h3>원본</h3><canvas id="cOrig"></canvas></div>
+      <div class="slot"><h3>탐지 결과(라인/클러스터)</h3><canvas id="cDebug"></canvas></div>
+    </div>
+    <div class="split" style="margin-top:12px">
+      <div class="slot"><h3>Ally (워프)</h3><canvas id="cAlly"></canvas></div>
+      <div class="slot"><h3>Enemy (워프)</h3><canvas id="cEnemy"></canvas></div>
+    </div>
 
+    <!-- 7×7 / 히어로 보드 -->
+    <div class="split" style="margin-top:12px">
+      <div class="slot">
+        <h3>Ally – Troops (7×7)</h3>
+        <div id="gridAlly" class="grid7"></div>
+        <div class="subhead">Ally – Heroes</div>
+        <div id="heroAlly" class="gridHeroes"></div>
+      </div>
+      <div class="slot">
+        <h3>Enemy – Troops (7×7)</h3>
+        <div id="gridEnemy" class="grid7"></div>
+        <div class="subhead">Enemy – Heroes</div>
+        <div id="heroEnemy" class="gridHeroes"></div>
+      </div>
+    </div>
 
-<!-- NEW: 용병/영웅 패치 보드 -->
-<div class="split" style="margin-top:12px">
-<div class="slot">
-<h3>Ally – Troops (7×7)</h3>
-<div id="gridAlly" class="grid7"></div>
-<div class="subhead">Ally – Heroes</div>
-<div id="heroAlly" class="gridHeroes"></div>
-</div>
-<div class="slot">
-<h3>Enemy – Troops (7×7)</h3>
-<div id="gridEnemy" class="grid7"></div>
-<div class="subhead">Enemy – Heroes</div>
-<div id="heroEnemy" class="gridHeroes"></div>
-</div>
-</div>
-
-
-<h3 style="margin-top:16px;color:var(--muted);font-size:12px">중간 결과</h3>
-<div class="grid" id="dbgGrid"></div>
-</section>
+    <h3 style="margin-top:16px;color:var(--muted);font-size:12px">중간 결과</h3>
+    <div class="grid" id="dbgGrid"></div>
+  </section>
 </main>
-
 
 <footer>브라우저 환경에 맞춰 일부 세부 로직이 간소화되어 있습니다.</footer>
 </body>
