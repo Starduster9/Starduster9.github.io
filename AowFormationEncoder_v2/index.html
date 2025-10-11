@@ -511,7 +511,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     dbg.push(['log_refined', eRef2.clone()]);
 
     // 다운스케일 Hough
-    const scale=0.25; // 0.5~0.75 권장
+    const scale=1.0; // 0.5~0.75 권장
     let small=new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
     let linesP=new cv.Mat();
     cv.HoughLinesP(
