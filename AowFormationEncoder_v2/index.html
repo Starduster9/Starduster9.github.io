@@ -592,7 +592,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     log('bitwise_and(eRefClean, bmask75) + dbg.clone', t);
   
     // 다운스케일 Hough
-    const scale = 1.0;
+    const scale = 0.5;
     t = performance.now();
     let small = new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
     log('resize(eRef2 → small)', t);
