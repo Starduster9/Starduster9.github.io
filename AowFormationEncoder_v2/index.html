@@ -265,18 +265,24 @@ function removeThinComponents(mask, minArea=100){
   return cleaned;
 }
 function sampleLineVals(mat, line){
-  // Supports 8U (ucharAt) and 32F (floatAt)
+  // Supports CV_8U (ucharAt), CV_32F (floatAt), CV_32S (intAt)
   const [x1,y1,x2,y2] = line.map(v=>Math.round(v));
   const dx = x2 - x1, dy = y2 - y1;
   const length = Math.max(1, Math.round(Math.hypot(dx,dy)) + 1);
   const xs = [], ys = [], vals = [];
-  const is32F = mat.type() === cv.CV_32F;
+  const type = mat.type();
+  const is32F = type === cv.CV_32F;
+  const is32S = type === cv.CV_32S;
   for (let k=0;k<length;k++){
     const x = Math.round(x1 + (dx)*(k/(length-1)));
     const y = Math.round(y1 + (dy)*(k/(length-1)));
     if (x>=0 && x<mat.cols && y>=0 && y<mat.rows){
       xs.push(x); ys.push(y);
-      vals.push(is32F ? mat.floatAt(y,x) : mat.ucharAt(y,x));
+      let v;
+      if (is32F) v = mat.floatAt(y,x);
+      else if (is32S) v = mat.intAt(y,x);
+      else v = mat.ucharAt(y,x);
+      vals.push(v);
     }
   }
   return {vals, xs, ys};
@@ -312,7 +318,7 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
 function clusterLinesByLabel(lines, labels){
   const clusters = new Map();
   for (let idx=0; idx<lines.length; idx++){
-    const {vals} = sampleLineInt(labels, lines[idx]);
+    const {vals} = sampleLineVals(labels, lines[idx]);
     const s = new Set();
     for (const v of vals){ if (v>=1) s.add(v); }
     const arr = Array.from(s).sort((a,b)=>a-b);
@@ -337,7 +343,7 @@ function clusterLinesByLabel(lines, labels){
 function buildLabelGraphFromLines(lines, labels){
   const G = new jsnx.Graph();
   for (let idx=0; idx<lines.length; idx++){
-    const {vals} = sampleLineInt(labels, lines[idx]);
+    const {vals} = sampleLineVals(labels, lines[idx]);
     const seq = vals.filter(v=>v>=1);
     if (seq.length<2) continue;
     // dedupe consecutive
