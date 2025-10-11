@@ -449,16 +449,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
 }
 
 /* ===== 간단 그래프 + 4사이클 ===== */
-(function(){
-  function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
-  class MiniGraph{
-    constructor(){ this.adj=new Map(); this.edges=new Map(); }
-    addEdge(a,b, data){
-      if (!this.adj.has(a)) this.adj.set(a,new Set());
-      if (!this.adj.has(b)) this.ad.set(b,new Set());
-    }
-  }
-})();
 function buildLabelGraphFromLines(lines, labels){
   // 경량 그래프
   function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
