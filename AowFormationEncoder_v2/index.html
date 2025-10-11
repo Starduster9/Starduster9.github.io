@@ -804,23 +804,52 @@ document.getElementById('run').addEventListener('click', async ()=>{
     // 1) Detect & Recognize (patches)
     const res=await detectAndRecognize(srcMat, opts, progress);
 
-    // 상단 디버그
-    const grid=document.getElementById('dbgGrid'); grid.innerHTML='';
-    const idxCluster = res.dbg.findIndex(d => d[0] === 'hough');
-    if (idxCluster >= 0) {
-      const m = res.dbg[idxCluster][1];
+    // === 안전한 디버그 렌더링 ===
+    const grid = document.getElementById('dbgGrid');
+    grid.innerHTML = '';
+    
+    // res.dbg는 형태가 [ [title, mat], ... ] 이므로,
+    // 여기서 shallow copy를 만들고, 'hough'를 분리해서 먼저 렌더링만 하고,
+    // 모든 렌더가 끝난 뒤에 한꺼번에 delete() 합니다.
+    const dbgEntries = res.dbg.slice(); // [[title, Mat], ...]
+    const matsToFree = [];
+    
+    // 1) 'hough' (라인 결과)를 상단 큰 캔버스에 먼저 표시 (삭제는 나중에)
+    const idxHough = dbgEntries.findIndex(d => d[0] === 'hough');
+    if (idxHough >= 0) {
+      const m = dbgEntries[idxHough][1];
       const c = document.getElementById('cDebug');
-      c.width = m.cols; c.height = m.rows;
-      canvasFromMat(m, c);
-      res.dbg[idxCluster][1].delete();
+      try {
+        c.width = m.cols; 
+        c.height = m.rows;
+        canvasFromMat(m, c);
+      } catch (e) {
+        console.warn('Failed to render hough debug mat:', e);
+      }
+      // 삭제는 나중에 일괄
+      matsToFree.push(m);
     }
-    // 나머지 중간결과(선택적으로 몇 개만)
-    for (const [title, mat] of res.dbg.slice(0, 4)) {
+    
+    // 2) 나머지 디버그 이미지들을 보드에 렌더 (제한적으로 3~5개만 노출해도 OK)
+    for (let i = 0, shown = 0; i < dbgEntries.length; i++) {
+      if (i === idxHough) continue; // 이미 위에서 렌더
+      const [title, mat] = dbgEntries[i];
       const { wrap, canvas } = makeDbgSlot(title);
       grid.appendChild(wrap);
-      canvas.width = mat.cols; canvas.height = mat.rows;
-      canvasFromMat(mat, canvas);
-      mat.delete();
+      try {
+        canvas.width = mat.cols; 
+        canvas.height = mat.rows;
+        canvasFromMat(mat, canvas);
+      } catch (e) {
+        console.warn(`Failed to render dbg mat '${title}':`, e);
+      }
+      matsToFree.push(mat);
+      if (++shown >= 4) break;  // 너무 많이 띄우면 리소스 큼 → 4개만 예시로
+    }
+    
+    // 3) 이제 안전하게 모두 해제
+    for (const m of matsToFree) {
+      try { m.delete(); } catch (_) {}
     }
 
     // 전체 워프
