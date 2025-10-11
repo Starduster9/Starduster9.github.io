@@ -368,20 +368,20 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const angleThr = (angleDeg * Math.PI/180) || (30 * Math.PI/180);
   const r = Math.max(1, brushSize | 0);
 
-  function ang(l){ return Math.atan2(l[3]-l[1], l[2]-l[0]); }
-  function intersect(l1,l2){
+  // 1) 교점 후보만 뽑기 (O(N^2) but 가벼움)
+  const angles = new Array(N);
+  const pts = []; // 교점 리스트
+  const ang = l => Math.atan2(l[3]-l[1], l[2]-l[0]);
+  const intersect = (l1,l2)=>{
     const [x1,y1,x2,y2]=l1, [x3,y3,x4,y4]=l2;
     const den=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);
     if (Math.abs(den) < eps) return null;
     const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/den;
     return [x1 + t*(x2-x1), y1 + t*(y2-y1)];
-  }
-  const mask = new cv.Mat.zeros(H, W, cv.CV_8U);
-  const angles = new Array(N);
+  };
   for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
 
-  let pairsTried = 0, dotsPainted = 0;
-
+  let pairsTried=0, dotsPainted=0;
   for (let i=0;i<N;i++){
     const ai = angles[i], li = lines[i];
     for (let j=i+1;j<N;j++){
@@ -390,13 +390,47 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
       const P = intersect(li, lines[j]); if (!P) continue;
       const x = P[0] | 0, y = P[1] | 0;
       if (x<0 || x>=W || y<0 || y>=H) { pairsTried++; continue; }
-      cv.circle(mask, new cv.Point(x,y), r, new cv.Scalar(255,255,255,255), -1);
+      pts.push(x, y);
       dotsPainted++; pairsTried++;
     }
   }
+
+  // 2) (옵션) 다운스케일 마스크에서 작업
+  //    고해상도면 scale=0.5 정도가 CC 시간을 크게 줄임
+  const scale = 1.0; // 필요시 0.5로 낮춰보세요
+  const hS = Math.max(1, Math.round(H*scale));
+  const wS = Math.max(1, Math.round(W*scale));
+  const mask = new cv.Mat.zeros(hS, wS, cv.CV_8U);
+  const M = mask.data; // TypedArray 직접 접근
+
+  // 3) 원 N번 그리기 대신: 점만 찍기(직접 메모리 write)
+  //    (x,y) -> (xs,ys)로 스케일 변환 후 255 세팅
+  for (let k=0; k<pts.length; k+=2){
+    const xs = Math.min(wS-1, Math.max(0, Math.round(pts[k]   * scale)));
+    const ys = Math.min(hS-1, Math.max(0, Math.round(pts[k+1] * scale)));
+    M[ys*wS + xs] = 255;
+  }
+
+  // 4) 한 번만 팽창해서 반경 r 보정 (EDT 기반이라 빠름)
+  //    scale<1이면 반경도 축소
+  const rScaled = Math.max(1, Math.round(r * scale));
+  const dil = (function fastDilateBinary(maskU8, radiusPx){
+    let inv = new cv.Mat(); cv.bitwise_not(maskU8, inv);
+    let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
+    inv.delete();
+    let out = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY_INV);
+    dist.delete();
+    let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
+    return u8;
+  })(mask, rScaled);
+  mask.delete();
+
+  // 5) 연결성분 (축소 해상도에서 계산 → 빠름)
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
-  const n = cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
-  mask.delete(); stats.delete(); cents.delete();
+  const n = cv.connectedComponentsWithStats(dil, labels, stats, cents, 4, cv.CV_32S);
+  // labels는 축소 해상도이지만, 이후 라인-샘플에는 '교차 레이블 맵'만 쓰므로 그대로 사용해도 무방
+  // (필요하면 업스케일해서 쓰되, 보통 레이블 맵은 샘플링 용도로 충분)
+  dil.delete(); stats.delete(); cents.delete();
 
   if (typeof progress!=='undefined' && progress && typeof progress._log==='function'){
     progress._log(`    • pairwise tried: ${pairsTried}`);
