@@ -552,6 +552,8 @@ function labelToColor(labels){
   return out; // CV_8UC3
 }
 
+function idKey(i,j){ return String(parseInt(`${i}${j}`,10)); } // Python과 동일 키(“01”→“1”)
+
 /* ============== 파이프라인 (detect + recognize_formations) ============== */
 async function detectAndRecognize(imgRGB, opts, progress){
   const H=imgRGB.rows, W=imgRGB.cols; const dbg=[];
@@ -847,7 +849,6 @@ async function detectAndRecognize(imgRGB, opts, progress){
 
     // Troops (7x7): 반드시 Hh_troop 사용
     const troopsAlly = {}, troopsEnemy = {};
-    function idKey(i,j){ return String(parseInt(`${i}${j}`,10)); } // Python과 동일 키(“01”→“1”)
     for (let i=0;i<nGrid;i++){
       for (let j=0;j<nGrid;j++){
         const qa = projectQuad(Hh_troop, gridQuadAlly(i,j));
