@@ -968,7 +968,7 @@ document.getElementById('run').addEventListener('click', async ()=>{
 
     for (let i=0;i<7;i++){
       for (let j=0;j<7;j++){
-        const key = `${i}${j}`;
+        const key = idKey(i,j);
         const A = res.troopsAlly[key], E = res.troopsEnemy[key];
         const ca = makeCellCanvas(key); gridAlly.appendChild(ca.wrap);
         const ce = makeCellCanvas(key); gridEnemy.appendChild(ce.wrap);
