@@ -213,17 +213,15 @@ function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
 function canvasFromMat(mat, canvas){ cv.imshow(canvas, mat); }
 function makeDbgSlot(title){ const wrap=document.createElement('div'); wrap.className='slot'; const h3=document.createElement('h3'); h3.textContent=title; wrap.appendChild(h3); const c=document.createElement('canvas'); wrap.appendChild(c); return {wrap,canvas:c}; }
 function sampleLineVals(mat, line){
-  const [x1,y1,x2,y2]=line.map(v=>Math.round(v));
-  const dx=x2-x1, dy=y2-y1, length=Math.max(1,Math.round(Math.hypot(dx,dy))+1);
-  const xs=[], ys=[], vals=[]; const type=mat.type(); const is32F=(type===cv.CV_32F), is32S=(type===cv.CV_32S);
-  for(let k=0;k<length;k++){
-    const x=Math.round(x1+dx*(k/(length-1))); const y=Math.round(y1+dy*(k/(length-1)));
-    if (x>=0 && x<mat.cols && y>=0 && y<mat.rows){
-      xs.push(x); ys.push(y);
-      vals.push(is32F? mat.floatAt(y,x) : is32S? mat.intAt(y,x) : mat.ucharAt(y,x));
-    }
+  const [x1,y1,x2,y2] = line.map(Math.round);
+  const it = new cv.LineIterator(mat, new cv.Point(x1,y1), new cv.Point(x2,y2), 8);
+  const vals = [];
+  for (let i=0; i<it.count; i++, it.next()) {
+    const p = it.pos();
+    vals.push(mat.ucharAt(p.y, p.x));
   }
-  return {vals,xs,ys};
+  it.delete();
+  return { vals };
 }
 function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const [H,W]=imgShape; let mask=new cv.Mat.zeros(H,W,cv.CV_8U); const eps=1e-9;
