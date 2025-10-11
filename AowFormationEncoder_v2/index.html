@@ -29,7 +29,7 @@
     footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
   </style>
   <!-- OpenCV.js (core+imgproc+imgcodecs+photo) -->
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="console.log('Loading OpenCV.js...')"></script>
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvLoaded()"></script>
   <!-- jsnetworkx for graph + cycle basis -->
   <script src="https://unpkg.com/jsnetworkx@0.3.4/dist/jsnetworkx.min.js"></script>
 </head>
@@ -82,14 +82,25 @@ let cvReady = false;
 let srcImg = null; // HTMLImageElement
 let srcMat = null; // cv.Mat RGBA
 
-function waitCvInit(){
-  if (cv && cv.Mat) { cv['onRuntimeInitialized'] = () => {
-      cvReady = true;
-      document.getElementById('run').disabled = false;
-      document.getElementById('status').textContent = '준비 완료';
-    }; }
+function onCvReady(){
+  cvReady = true;
+  const runEl = document.getElementById('run');
+  if (runEl) runEl.disabled = false;
+  const st = document.getElementById('status');
+  if (st) st.textContent = '준비 완료';
 }
-waitCvInit();
+function onOpenCvLoaded(){
+  if (typeof cv !== 'undefined'){
+    cv['onRuntimeInitialized'] = onCvReady;
+  } else {
+    const t = setInterval(()=>{
+      if (typeof cv !== 'undefined'){
+        cv['onRuntimeInitialized'] = onCvReady;
+        clearInterval(t);
+      }
+    }, 50);
+  }
+}
 
 // ---------- Utils ----------
 function matFromImage(img){
