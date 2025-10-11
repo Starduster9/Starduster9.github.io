@@ -118,15 +118,24 @@ function toGray(mat){
   return gray; // 8UC1
 }
 function percentileGray(mat, perc){
-  // approximate percentile by histogram
-  let hist = new cv.Mat();
-  const channels=[0], mask=new cv.Mat();
-  const histSize=[256], ranges=[0,256];
-  cv.calcHist([mat], channels, mask, hist, histSize, ranges);
-  let total = mat.rows * mat.cols; let cum=0; let thr=255;
+  // Use MatVector as required by OpenCV.js
+  const images = new cv.MatVector();
+  images.push_back(mat);
+  const channels = [0];
+  const mask = new cv.Mat();
+  const hist = new cv.Mat();
+  const histSize = [256];
+  const ranges = [0, 256];
+  cv.calcHist(images, channels, mask, hist, histSize, ranges);
+  const total = mat.rows * mat.cols;
   const target = Math.max(0, Math.min(1, perc/100)) * total;
-  for (let i=0;i<256;i++){ cum += hist.intAt(i,0); if (cum >= target){thr=i;break;} }
-  hist.delete(); mask.delete();
+  let cum = 0; let thr = 255;
+  for (let i=0;i<256;i++){
+    // hist is CV_32F in OpenCV.js
+    cum += hist.floatAt(i,0);
+    if (cum >= target){ thr = i; break; }
+  }
+  images.delete(); mask.delete(); hist.delete();
   return thr|0;
 }
 function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
@@ -218,16 +227,19 @@ function removeThinComponents(mask, minArea=100){
   labels.delete(); stats.delete(); centroids.delete();
   return cleaned;
 }
-function sampleLineInt(img8u, line){
+function sampleLineVals(mat, line){
+  // Supports 8U (ucharAt) and 32F (floatAt)
   const [x1,y1,x2,y2] = line.map(v=>Math.round(v));
   const dx = x2 - x1, dy = y2 - y1;
-  const length = Math.round(Math.hypot(dx,dy)) + 1;
+  const length = Math.max(1, Math.round(Math.hypot(dx,dy)) + 1);
   const xs = [], ys = [], vals = [];
+  const is32F = mat.type() === cv.CV_32F;
   for (let k=0;k<length;k++){
-    const x = Math.round(x1 + dx*k/(length-1));
-    const y = Math.round(y1 + dy*k/(length-1));
-    if (x>=0 && x<img8u.cols && y>=0 && y<img8u.rows){
-      xs.push(x); ys.push(y); vals.push(img8u.ucharAt(y,x));
+    const x = Math.round(x1 + (dx)*(k/(length-1)));
+    const y = Math.round(y1 + (dy)*(k/(length-1)));
+    if (x>=0 && x<mat.cols && y>=0 && y<mat.rows){
+      xs.push(x); ys.push(y);
+      vals.push(is32F ? mat.floatAt(y,x) : mat.ucharAt(y,x));
     }
   }
   return {vals, xs, ys};
@@ -446,7 +458,7 @@ async function detectAndRecognize(imgRGB, opts){
     lines.push([x1,y1,x2,y2]);
   }
   linesP.delete();
-  const visHough = drawLinesOn(imgRGB, lines, [255,128,0], 2);
+  const visHough = drawLinesOn(imgRGB, lines, [255,128,0], 2); // debug
   dbg.push(['hough', visHough]);
 
   // intersections → labels
@@ -476,8 +488,7 @@ async function detectAndRecognize(imgRGB, opts){
     let best=null, bestScore=-1e9;
     for (const idx of arr){
       const line = lines[idx];
-      const samples = sampleLineInt(dist, line).vals; // float values via .ucharAt? dist is 32F; use at
-      // workaround: read via Float32Array view
+      const samples = sampleLineVals(dist, line).vals;
       let score=0; for (let k=0;k<samples.length;k++){ score += samples[k]; }
       if (score>bestScore){ bestScore=score; best=line; }
     }
