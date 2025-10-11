@@ -281,21 +281,11 @@ function fastCloseBinary(mask, radiusPx){
 
 /* ===== 모폴로지 (자동 디스패치: Binary+큰 r이면 EDT 사용) ===== */
 function morph(mat, op, kSize=3, iters=1){
-  const isBinaryU8 = (mat.type() === cv.CV_8U);
   const r = Math.max(1, Math.floor(kSize/2));
-  if (isBinaryU8 && r >= 3){
-    if(op==='dilate') return fastDilateBinary(mat, r);
-    if(op==='erode')  return fastErodeBinary(mat,  r);
-    if(op==='open')   return fastOpenBinary(mat,   r);
-    if(op==='close')  return fastCloseBinary(mat,  r);
-  }
-  const kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE,new cv.Size(kSize,kSize));
-  let out=new cv.Mat();
-  if(op==='close') cv.morphologyEx(mat,out,cv.MORPH_CLOSE,kernel,new cv.Point(-1,-1),iters);
-  else if(op==='open') cv.morphologyEx(mat,out,cv.MORPH_OPEN,kernel,new cv.Point(-1,-1),iters);
-  else if(op==='dilate') cv.dilate(mat,out,kernel,new cv.Point(-1,-1),iters);
-  else if(op==='erode') cv.erode(mat,out,kernel,new cv.Point(-1,-1),iters);
-  kernel.delete(); return out;
+  if(op==='dilate') return fastDilateBinary(mat, r);
+  if(op==='erode')  return fastErodeBinary(mat,  r);
+  if(op==='open')   return fastOpenBinary(mat,   r);
+  if(op==='close')  return fastCloseBinary(mat,  r);
 }
 
 function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
