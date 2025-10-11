@@ -528,15 +528,26 @@ function normalizeForView(mat32f){
   let out=new cv.Mat(); const scale=maxv>0? 255.0/maxv : 1.0; mat32f.convertTo(out, cv.CV_8U, scale, 0); return out;
 }
 function labelToColor(labels) {
-  // 라벨을 0~255로 정규화
-  const norm = new cv.Mat();
-  const minMax = cv.minMaxLoc(labels);
-  const maxv = minMax.maxVal || 1;
-  labels.convertTo(norm, cv.CV_8U, 255.0 / maxv);
-  const colored = new cv.Mat();
-  cv.applyColorMap(norm, colored, cv.COLORMAP_JET);
-  norm.delete();
-  return colored;
+  const rows = labels.rows, cols = labels.cols;
+  const colorImg = new cv.Mat.zeros(rows, cols, cv.CV_8UC3);
+  let stats = new cv.Mat(), cents = new cv.Mat();
+  const n = cv.connectedComponentsWithStats(labels, new cv.Mat(), stats, cents);
+  const colors = [];
+  for (let i = 1; i < n; i++) {
+    colors[i] = [
+      40 + (Math.random() * 215)|0,
+      40 + (Math.random() * 215)|0,
+      40 + (Math.random() * 215)|0
+    ];
+    const x = cents.doubleAt(i,0)|0, y = cents.doubleAt(i,1)|0;
+    if (x>=0 && x<cols && y>=0 && y<rows){
+      const p = colorImg.ucharPtr(y,x);
+      const c = colors[i];
+      p[0]=c[0]; p[1]=c[1]; p[2]=c[2];
+    }
+  }
+  stats.delete(); cents.delete();
+  return colorImg;
 }
 
 /* ============== 파이프라인 (with progress + speedups) ============== */
