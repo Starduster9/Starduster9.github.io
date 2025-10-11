@@ -397,7 +397,7 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
 
   // 2) (옵션) 다운스케일 마스크에서 작업
   //    고해상도면 scale=0.5 정도가 CC 시간을 크게 줄임
-  const scale = 1.0; // 필요시 0.5로 낮춰보세요
+  const scale = 0.5; // 필요시 0.5로 낮춰보세요
   const hS = Math.max(1, Math.round(H*scale));
   const wS = Math.max(1, Math.round(W*scale));
   const mask = new cv.Mat.zeros(hS, wS, cv.CV_8U);
