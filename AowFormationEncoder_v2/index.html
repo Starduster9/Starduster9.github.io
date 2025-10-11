@@ -199,6 +199,21 @@ function onCvReady(){
 
 function matFromImage(img){ const m=cv.imread(img); let rgb=new cv.Mat(); cv.cvtColor(m,rgb,cv.COLOR_RGBA2RGB); m.delete(); return rgb; }
 function toGray(mat){ if (mat.type()===cv.CV_8UC1) return mat.clone(); let g=new cv.Mat(); cv.cvtColor(mat,g,cv.COLOR_RGB2GRAY); return g; }
+// 라인들 시각화해서 Mat 반환
+function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
+  const col = new cv.Scalar(
+    (Array.isArray(color) ? (color[0] ?? 255) : 255),
+    (Array.isArray(color) ? (color[1] ?? 0)   : 0),
+    (Array.isArray(color) ? (color[2] ?? 0)   : 0),
+    255
+  );
+  const out = mat.clone();
+  for (let i=0; i<lines.length; i++){
+    const [x1,y1,x2,y2] = lines[i];
+    cv.line(out, new cv.Point(x1|0,y1|0), new cv.Point(x2|0,y2|0), col, thickness, cv.LINE_AA);
+  }
+  return out;
+}
 
 /* ===== 빠른 히스토그램 분위수 ===== */
 function percentileGray(mat, perc){
