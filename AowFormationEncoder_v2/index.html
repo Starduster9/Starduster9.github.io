@@ -604,9 +604,11 @@ function labelToColor(labels){
   return out;
 }
 function normalizeForView(mat32f){
-  let out = new cv.Mat(); let min = {value:0}, max={value:0};
-  cv.minMaxLoc(mat32f, min, max);
-  const scale = max.value>0? 255.0/max.value : 1.0;
+  // OpenCV.js: cv.minMaxLoc returns an object {minVal,maxVal,minLoc,maxLoc}
+  const mm = cv.minMaxLoc(mat32f);
+  const maxv = (mm && typeof mm.maxVal === 'number') ? mm.maxVal : 0;
+  let out = new cv.Mat();
+  const scale = maxv > 0 ? 255.0 / maxv : 1.0;
   mat32f.convertTo(out, cv.CV_8U, scale, 0);
   return out;
 }
