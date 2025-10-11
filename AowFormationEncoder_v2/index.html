@@ -856,7 +856,7 @@ document.getElementById('run').addEventListener('click', async ()=>{
       angleDeg:Number(document.getElementById('angleDeg').value)||45,
       brush:Number(document.getElementById('brush').value)||5,
       sizeFull:Number(document.getElementById('sizeFull').value)||1024,
-      sizePatch(Number(document.getElementById('sizePatch').value)||32)
+      sizePatch:Number(document.getElementById('sizePatch').value)||32
     };
     // fix small typo: ensure property exists
     if (typeof opts.sizePatch!=='number') opts.sizePatch = Number(document.getElementById('sizePatch').value)||32;
