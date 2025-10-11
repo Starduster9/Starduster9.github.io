@@ -361,17 +361,29 @@ function sampleLineVals(mat, line){
 }
 
 /* ===== 교차 라벨 생성: 전수 비교(O(N^2)) ===== */
-function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
+function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape, prog){
   const [H, W] = imgShape;
   const N = lines.length | 0;
   const eps = 1e-9;
   const angleThr = (angleDeg * Math.PI/180) || (30 * Math.PI/180);
   const r = Math.max(1, brushSize | 0);
+  const logger = (msg)=>{
+    const p = prog || (typeof progress!=='undefined' ? progress : null);
+    if (p && typeof p._log==='function') p._log(msg);
+  };
 
-  // 1) 교점 후보만 뽑기 (O(N^2) but 가벼움)
-  const angles = new Array(N);
-  const pts = []; // 교점 리스트
+  const tAll0 = performance.now();
+
+  // 1) 각도 프리컴퓨트
+  const t1 = performance.now();
   const ang = l => Math.atan2(l[3]-l[1], l[2]-l[0]);
+  const angles = new Array(N);
+  for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
+  logger(`  [CI] angles precompute: ${(performance.now()-t1).toFixed(1)} ms`);
+
+  // 2) 쌍 검사(O(N^2)) + 교점 수집
+  const t2 = performance.now();
+  const pts = []; // [x0,y0, x1,y1, ...]
   const intersect = (l1,l2)=>{
     const [x1,y1,x2,y2]=l1, [x3,y3,x4,y4]=l2;
     const den=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);
@@ -379,8 +391,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
     const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/den;
     return [x1 + t*(x2-x1), y1 + t*(y2-y1)];
   };
-  for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
-
   let pairsTried=0, dotsPainted=0;
   for (let i=0;i<N;i++){
     const ai = angles[i], li = lines[i];
@@ -394,49 +404,48 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
       dotsPainted++; pairsTried++;
     }
   }
+  logger(`  [CI] pairwise check: ${(performance.now()-t2).toFixed(1)} ms (pairs=${pairsTried}, dots=${dotsPainted})`);
 
-  // 2) (옵션) 다운스케일 마스크에서 작업
-  //    고해상도면 scale=0.5 정도가 CC 시간을 크게 줄임
-  const scale = 1.0; // 필요시 0.5로 낮춰보세요
+  // 3) (옵션) 다운스케일 마스크에서 작업
+  const scale = 1.0; // 필요시 0.5 등으로 내려 CC 시간 절약 가능
   const hS = Math.max(1, Math.round(H*scale));
   const wS = Math.max(1, Math.round(W*scale));
   const mask = new cv.Mat.zeros(hS, wS, cv.CV_8U);
-  const M = mask.data; // TypedArray 직접 접근
+  const M = mask.data;
 
-  // 3) 원 N번 그리기 대신: 점만 찍기(직접 메모리 write)
-  //    (x,y) -> (xs,ys)로 스케일 변환 후 255 세팅
+  // 4) 점 플로팅(직접 메모리 write)
+  const t4 = performance.now();
   for (let k=0; k<pts.length; k+=2){
     const xs = Math.min(wS-1, Math.max(0, Math.round(pts[k]   * scale)));
     const ys = Math.min(hS-1, Math.max(0, Math.round(pts[k+1] * scale)));
     M[ys*wS + xs] = 255;
   }
+  logger(`  [CI] plot points: ${(performance.now()-t4).toFixed(1)} ms`);
 
-  // 4) 한 번만 팽창해서 반경 r 보정 (EDT 기반이라 빠름)
-  //    scale<1이면 반경도 축소
+  // 5) 반경 보정: EDT 기반 1회 팽창
+  const t5 = performance.now();
   const rScaled = Math.max(1, Math.round(r * scale));
-  const dil = (function fastDilateBinary(maskU8, radiusPx){
-    let inv = new cv.Mat(); cv.bitwise_not(maskU8, inv);
-    let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
-    inv.delete();
-    let out = new cv.Mat(); cv.threshold(dist, out, radiusPx, 255, cv.THRESH_BINARY_INV);
-    dist.delete();
-    let u8 = new cv.Mat(); out.convertTo(u8, cv.CV_8U); out.delete();
-    return u8;
-  })(mask, rScaled);
+  // fastDilateBinary가 이미 코드에 있다면 사용, 없으면 아래 두 줄을 직접 사용
+  let inv = new cv.Mat(); cv.bitwise_not(mask, inv);
+  let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
+  inv.delete();
+  let dil = new cv.Mat(); cv.threshold(dist, dil, rScaled, 255, cv.THRESH_BINARY_INV);
+  dist.delete();
+  let maskDil = new cv.Mat(); dil.convertTo(maskDil, cv.CV_8U); dil.delete();
   mask.delete();
+  logger(`  [CI] dilate (EDT+thresh): ${(performance.now()-t5).toFixed(1)} ms`);
 
-  // 5) 연결성분 (축소 해상도에서 계산 → 빠름)
+  // 6) 연결 성분
+  const t6 = performance.now();
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
-  const n = cv.connectedComponentsWithStats(dil, labels, stats, cents, 4, cv.CV_32S);
-  // labels는 축소 해상도이지만, 이후 라인-샘플에는 '교차 레이블 맵'만 쓰므로 그대로 사용해도 무방
-  // (필요하면 업스케일해서 쓰되, 보통 레이블 맵은 샘플링 용도로 충분)
-  dil.delete(); stats.delete(); cents.delete();
+  const n = cv.connectedComponentsWithStats(maskDil, labels, stats, cents, 4, cv.CV_32S);
+  maskDil.delete(); stats.delete(); cents.delete();
+  logger(`  [CI] connected components: ${(performance.now()-t6).toFixed(1)} ms`);
 
-  if (typeof progress!=='undefined' && progress && typeof progress._log==='function'){
-    progress._log(`    • pairwise tried: ${pairsTried}`);
-    progress._log(`    • painted dots: ${dotsPainted}`);
-    progress._log(`    • components: ${Math.max(n-1,0)}`);
-  }
+  // 총합
+  logger(`  [CI] total: ${(performance.now()-tAll0).toFixed(1)} ms`);
+  logger(`    • components: ${Math.max(n-1,0)}`);
+
   return { count: Math.max(n-1,0), labels };
 }
 
