@@ -463,6 +463,22 @@ function buildLabelGraphFromLines(lines, labels){
 }
 function abcline(line){ const [x1,y1,x2,y2]=line.map(Number); const dx=x2-x1, dy=y2-y1; const a=dy,b=-dx,c=-(a*x1+b*y1); return {a,b,c}; }
 function intersectLines(l1,l2){ const A=abcline(l1), B=abcline(l2); const det=A.a*B.b-B.a*A.b; if (Math.abs(det)<1e-9) return [NaN,NaN]; const x=(A.b*B.c-B.b*A.c)/det, y=(A.c*B.a-B.c*A.a)/det; return [x,y]; }
+function cornersFromCycles(linesBest, cycles){
+  const quads=cycles.filter(c=>c.length===4); const corners=[];
+  for (const cyc of quads){
+    const edges=[[cyc[0],cyc[1]],[cyc[1],cyc[2]],[cyc[2],cyc[3]],[cyc[3],cyc[0]]];
+    const lines=[]; let ok=true;
+    for (const [u,v] of edges){ const key=(Math.min(u,v)+'-'+Math.max(u,v)); if (!linesBest.has(key)){ ok=false; break; } lines.push(linesBest.get(key)); }
+    if (!ok){ corners.push([[NaN,NaN],[NaN,NaN],[NaN,NaN],[NaN,NaN]]); continue; }
+    corners.push([
+      intersectLines(lines[3],lines[0]),
+      intersectLines(lines[0],lines[1]),
+      intersectLines(lines[1],lines[2]),
+      intersectLines(lines[2],lines[3]),
+    ]);
+  }
+  return corners;
+}
 function polygonArea(pts){ if (pts.some(p=>!isFinite(p[0])||!isFinite(p[1]))) return 0; let s=0; for (let i=0;i<pts.length;i++){ const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length]; s+=x1*y2 - y1*x2; } return Math.abs(0.5*s); }
 function orderCornersTLTRBRBL(pts){
   const arr = pts.map(p => ({ p, s: p[0] + p[1], d: p[0] - p[1] }));
