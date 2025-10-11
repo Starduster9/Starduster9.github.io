@@ -228,6 +228,24 @@ function canvasFromMat(mat, canvasOrEl){
   }
   cv.imshow(canvas, mat);
 }
+function makeDbgSlot(title){
+  const wrap = document.createElement('div');
+  wrap.className = 'slot';
+
+  const h3 = document.createElement('h3');
+  h3.textContent = title;
+
+  const canvas = document.createElement('canvas');
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
+  canvas.style.display = 'block';
+  canvas.style.borderRadius = '8px';
+  canvas.style.background = '#0b0d10';
+
+  wrap.appendChild(h3);
+  wrap.appendChild(canvas);
+  return { wrap, canvas };
+}
 
 /* ===== 빠른 히스토그램 분위수 ===== */
 function percentileGray(mat, perc){
