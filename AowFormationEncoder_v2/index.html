@@ -651,7 +651,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     let t;
   
     t = performance.now();
-    const ksize = (Math.max(H, W) / 300) | 0;
+    const ksize = (Math.max(H, W) / 200) | 0;
     const bmask75 = brightnessMask(gray, 75);
     log('brightnessMask(75)', t);
   
