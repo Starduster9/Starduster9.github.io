@@ -161,3 +161,16 @@ summary{cursor:pointer; color:#1d4ed8}
   button.ghost{background:#151b2e; color:#e6ecff; border-color:#233055}
   summary{color:#93c5fd}
 }
+
+/* 작은 화면에서 카드 단일 컬럼 + 터치 타겟 확대 */
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr !important; }
+  .actions .primary { padding: 14px 16px; font-size: 16px; border-radius: 12px; }
+  textarea { min-height: 140px; font-size: 14px; }
+  .thumb { max-width: 100%; height: auto; border-radius: 8px; }
+}
+
+/* 큰 화면에선 2열 배치로 반죽(아군/적군) 나란히 */
+@media (min-width: 721px) {
+  .grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+}
