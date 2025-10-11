@@ -29,7 +29,38 @@
     footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
   </style>
   <!-- OpenCV.js (core+imgproc+imgcodecs+photo) -->
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvLoaded()"></script>
+  <script>(function(){
+  var statusEl = null; // will be resolved after DOM ready
+  function setStatus(t){
+    if (!statusEl) statusEl = document.getElementById('status');
+    if (statusEl) statusEl.textContent = t;
+  }
+  window.onOpenCvLoaded = function(){
+    if (typeof cv !== 'undefined'){
+      cv['onRuntimeInitialized'] = function(){ if (typeof onCvReady==='function') onCvReady(); };
+    }
+  };
+  var candidates = [
+    'https://docs.opencv.org/4.10.0/opencv.js',
+    'https://cdn.jsdelivr.net/npm/opencv.js@4.10.0/dist/opencv.js'
+  ];
+  var tried = 0;
+  function loadNext(){
+    if (tried >= candidates.length){ setStatus('OpenCV.js 로드를 실패했습니다'); return; }
+    var url = candidates[tried++]; setStatus('OpenCV.js 로딩 중… ' + url);
+    var s = document.createElement('script'); s.src = url; s.async = true;
+    s.onload = function(){ setStatus('OpenCV.js 스크립트 로드됨'); if (typeof onOpenCvLoaded==='function') onOpenCvLoaded(); };
+    s.onerror = function(){ setStatus('로드 실패: '+url); loadNext(); };
+    document.head.appendChild(s);
+  }
+  loadNext();
+  // watchdog: if runtime not initialized in 10s, attempt next CDN
+  setTimeout(function(){
+    if (!(window.cv && cv.Mat)){
+      setStatus('초기화 지연: 대체 CDN 시도'); loadNext();
+    }
+  }, 10000);
+})();</script>
   <!-- jsnetworkx for graph + cycle basis -->
   <script src="https://unpkg.com/jsnetworkx@0.3.4/dist/jsnetworkx.min.js"></script>
 </head>
