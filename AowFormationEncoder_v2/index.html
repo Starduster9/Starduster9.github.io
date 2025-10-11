@@ -322,6 +322,18 @@ function morph(mat, op, kSize=3, iters=1){
   throw new Error(`Unknown morph op: ${op}`);
 }
 function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
+/* ===== 라벨 기반 마스크 재구성(고속, 단일 패스) ===== */
+function maskFromLabelsSet(labels, keepSet){
+  const rows=labels.rows, cols=labels.cols, N=rows*cols;
+  const L = labels.data32S;
+  let out = new cv.Mat.zeros(rows, cols, cv.CV_8U);
+  const M = out.data;
+  for (let i=0;i<N;i++){
+    const v = L[i];
+    if (v>=1 && keepSet.has(v)) M[i]=255;
+  }
+  return out;
+}
 function removeSmallComponents(mask, minArea=100, area_w_wh=false){
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
   const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
