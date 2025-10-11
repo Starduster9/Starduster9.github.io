@@ -1,661 +1,485 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Formation Detector – OpenCV.js</title>
-  <style>
-    :root{--bg:#0b0d10;--card:#12161b;--ink:#e6edf3;--muted:#9aa7b5;--accent:#5b9cff}
-    html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Apple SD Gothic Neo, Malgun Gothic, sans-serif}
-    header{display:flex;gap:12px;align-items:center;padding:16px 20px;border-bottom:1px solid #1e242c}
-    header h1{font-size:16px;margin:0;letter-spacing:.2px}
-    .badge{padding:2px 8px;border-radius:999px;background:#1a2330;border:1px solid #2a3442;color:var(--muted)}
-    main{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px}
-    .panel{background:var(--card);border:1px solid #1e242c;border-radius:16px;padding:14px}
-    .panel h2{margin:0 0 12px 0;font-size:14px;color:var(--muted);font-weight:600}
-    .row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-    input[type=file]{width:100%}
-    .btn{appearance:none;background:var(--accent);color:#fff;border:none;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
-    .btn[disabled]{opacity:.6;cursor:default}
-    label{color:var(--muted);font-size:12px}
-    .grid{display:grid;grid-template-columns:repeat(3, minmax(200px,1fr));gap:12px}
-    .slot{background:#0f1318;border:1px dashed #2a3442;border-radius:12px;padding:8px}
-    .slot h3{margin:0 0 8px 0;font-size:12px;color:var(--muted)}
-    canvas{display:block;width:100%;height:auto;background:#0b0d10;border-radius:8px}
-    .note{color:var(--muted);font-size:12px}
-    .split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 10px}
-    code{background:#0f1318;padding:2px 6px;border-radius:6px}
-    footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
-  </style>
-  <!-- OpenCV.js (core+imgproc+imgcodecs+photo) -->
-  <script>(function(){
-  var statusEl = null; // will be resolved after DOM ready
-  function setStatus(t){
-    if (!statusEl) statusEl = document.getElementById('status');
-    if (statusEl) statusEl.textContent = t;
-  }
-  window.onOpenCvLoaded = function(){
-    if (typeof cv !== 'undefined'){
-      cv['onRuntimeInitialized'] = function(){ if (typeof onCvReady==='function') onCvReady(); };
-    }
-  };
-  var candidates = [
-    'https://docs.opencv.org/4.10.0/opencv.js',
-    'https://cdn.jsdelivr.net/npm/opencv.js@4.10.0/dist/opencv.js'
-  ];
-  var tried = 0;
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Formation Detector – OpenCV.js (no jsnetworkx)</title>
+<style>
+:root{--bg:#0b0d10;--card:#12161b;--ink:#e6edf3;--muted:#9aa7b5;--accent:#5b9cff}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Apple SD Gothic Neo,Malgun Gothic,sans-serif}
+header{display:flex;gap:12px;align-items:center;padding:16px 20px;border-bottom:1px solid #1e242c}
+header h1{font-size:16px;margin:0;letter-spacing:.2px}
+.badge{padding:2px 8px;border-radius:999px;background:#1a2330;border:1px solid #2a3442;color:var(--muted)}
+main{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px}
+.panel{background:var(--card);border:1px solid #1e242c;border-radius:16px;padding:14px}
+.panel h2{margin:0 0 12px 0;font-size:14px;color:var(--muted);font-weight:600}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+input[type=file]{width:100%}
+.btn{appearance:none;background:var(--accent);color:#fff;border:none;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
+.btn[disabled]{opacity:.6;cursor:default}
+label{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(3, minmax(200px,1fr));gap:12px}
+.slot{background:#0f1318;border:1px dashed #2a3442;border-radius:12px;padding:8px}
+.slot h3{margin:0 0 8px 0;font-size:12px;color:var(--muted)}
+canvas{display:block;width:100%;height:auto;background:#0b0d10;border-radius:8px}
+.note{color:var(--muted);font-size:12px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:6px 10px}
+footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
+</style>
+
+<!-- OpenCV.js 로더: 폴백 + 워치독 -->
+<script>
+(function(){
+  var statusEl=null;
+  function setStatus(t){ if(!statusEl)statusEl=document.getElementById('status'); if(statusEl)statusEl.textContent=t; }
+  window.onOpenCvLoaded=function(){ if(typeof cv!=='undefined'){ cv['onRuntimeInitialized']=function(){ if(typeof onCvReady==='function') onCvReady(); }; } };
+  var urls=['https://docs.opencv.org/4.10.0/opencv.js','https://cdn.jsdelivr.net/npm/opencv.js@4.10.0/dist/opencv.js'];
+  var i=0;
   function loadNext(){
-    if (tried >= candidates.length){ setStatus('OpenCV.js 로드를 실패했습니다'); return; }
-    var url = candidates[tried++]; setStatus('OpenCV.js 로딩 중… ' + url);
-    var s = document.createElement('script'); s.src = url; s.async = true;
-    s.onload = function(){ setStatus('OpenCV.js 스크립트 로드됨'); if (typeof onOpenCvLoaded==='function') onOpenCvLoaded(); };
-    s.onerror = function(){ setStatus('로드 실패: '+url); loadNext(); };
+    if(i>=urls.length){setStatus('OpenCV.js 로드 실패');return;}
+    var u=urls[i++]; setStatus('OpenCV.js 로딩 중… '+u);
+    var s=document.createElement('script'); s.src=u; s.async=true;
+    s.onload=function(){setStatus('OpenCV.js 스크립트 로드됨'); if(typeof onOpenCvLoaded==='function') onOpenCvLoaded();};
+    s.onerror=function(){setStatus('로드 실패: '+u); loadNext();};
     document.head.appendChild(s);
   }
   loadNext();
-  // watchdog: if runtime not initialized in 10s, attempt next CDN
   setTimeout(function(){
-    if (!(window.cv && cv.Mat)){
-      setStatus('초기화 지연: 대체 CDN 시도'); loadNext();
-    }
-  }, 10000);
-})();</script>
-  <!-- jsnetworkx for graph + cycle basis -->
-  <script src="https://unpkg.com/jsnetworkx@0.3.4/dist/jsnetworkx.min.js"></script>
+    if(!(window.cv&&cv.Mat)){ setStatus('초기화 지연: 대체 CDN 시도'); loadNext(); }
+  },10000);
+})();
+</script>
 </head>
-<body>
-  <header>
-    <h1>Formation Detector (OpenCV.js)</h1>
-    <span class="badge">LoG → Morph → HoughP → Intersections → Graph Cycles</span>
-  </header>
-  <main>
-    <section class="panel" id="controls">
-      <h2>입력 & 설정</h2>
-      <div class="row"><input id="file" type="file" accept="image/*" /></div>
-      <div class="kv">
-        <label for="sizeFull">size_full</label>
-        <input id="sizeFull" type="number" value="1024" min="256" max="4096" />
-        <label for="sizePatch">size_patch</label>
-        <input id="sizePatch" type="number" value="32" min="8" max="512" />
-        <label for="angleDeg">교차 각 임계(angle_deg)</label>
-        <input id="angleDeg" type="number" value="45" min="0" max="90" />
-        <label for="brush">브러시 반경(px)</label>
-        <input id="brush" type="number" value="5" min="1" max="40" />
-      </div>
-      <div class="row">
-        <button id="run" class="btn" disabled>실행</button>
-        <span class="note" id="status">OpenCV.js 초기화 대기중…</span>
-      </div>
-      <p class="note">브라우저에서 WebAssembly로 실행됩니다. 대용량 이미지에서는 수 초가 걸릴 수 있습니다.</p>
-    </section>
 
-    <section class="panel">
-      <h2>결과</h2>
-      <div class="split">
-        <div class="slot"><h3>원본</h3><canvas id="cOrig"></canvas></div>
-        <div class="slot"><h3>탐지 결과(라인/클러스터)</h3><canvas id="cDebug"></canvas></div>
-      </div>
-      <div class="split" style="margin-top:12px">
-        <div class="slot"><h3>Ally (워프)</h3><canvas id="cAlly"></canvas></div>
-        <div class="slot"><h3>Enemy (워프)</h3><canvas id="cEnemy"></canvas></div>
-      </div>
-      <h3 style="margin-top:16px;color:var(--muted);font-size:12px">중간 결과</h3>
-      <div class="grid" id="dbgGrid"></div>
-    </section>
-  </main>
-  <footer>
-    포팅: Python → OpenCV.js / jsnetworkx. 원 코드의 세부와 완벽히 동일하지 않을 수 있습니다.
-  </footer>
+<body>
+<header>
+  <h1>Formation Detector (OpenCV.js)</h1>
+  <span class="badge">LoG → Morph → HoughP → Intersections → Graph 4-cycles</span>
+</header>
+
+<main>
+  <section class="panel" id="controls">
+    <h2>입력 & 설정</h2>
+    <div class="row"><input id="file" type="file" accept="image/*" /></div>
+    <div class="kv">
+      <label for="sizeFull">size_full</label>
+      <input id="sizeFull" type="number" value="1024" min="256" max="4096" />
+      <label for="sizePatch">size_patch</label>
+      <input id="sizePatch" type="number" value="32" min="8" max="512" />
+      <label for="angleDeg">교차 각 임계(angle_deg)</label>
+      <input id="angleDeg" type="number" value="45" min="0" max="90" />
+      <label for="brush">브러시 반경(px)</label>
+      <input id="brush" type="number" value="5" min="1" max="40" />
+    </div>
+    <div class="row">
+      <button id="run" class="btn" disabled>실행</button>
+      <span class="note" id="status">OpenCV.js 초기화 대기중…</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>결과</h2>
+    <div class="split">
+      <div class="slot"><h3>원본</h3><canvas id="cOrig"></canvas></div>
+      <div class="slot"><h3>탐지 결과(라인/클러스터)</h3><canvas id="cDebug"></canvas></div>
+    </div>
+    <div class="split" style="margin-top:12px">
+      <div class="slot"><h3>Ally (워프)</h3><canvas id="cAlly"></canvas></div>
+      <div class="slot"><h3>Enemy (워프)</h3><canvas id="cEnemy"></canvas></div>
+    </div>
+    <h3 style="margin-top:16px;color:var(--muted);font-size:12px">중간 결과</h3>
+    <div class="grid" id="dbgGrid"></div>
+  </section>
+</main>
+
+<footer>브라우저 환경에 맞춰 일부 세부 로직이 간소화되어 있습니다.</footer>
 
 <script>
-let cvReady = false;
-let srcImg = null; // HTMLImageElement
-let srcMat = null; // cv.Mat RGBA
-
-function onCvReady(){
-  cvReady = true;
-  const runEl = document.getElementById('run');
-  if (runEl) runEl.disabled = false;
-  const st = document.getElementById('status');
-  if (st) st.textContent = '준비 완료';
-}
-function onOpenCvLoaded(){
-  if (typeof cv !== 'undefined'){
-    cv['onRuntimeInitialized'] = onCvReady;
-  } else {
-    const t = setInterval(()=>{
-      if (typeof cv !== 'undefined'){
-        cv['onRuntimeInitialized'] = onCvReady;
-        clearInterval(t);
+// ======= 의존성 없는 MiniGraph + 4-사이클 탐색 =======
+(function(){
+  function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
+  class MiniGraph{
+    constructor(){ this.adj=new Map(); this.edges=new Map(); }
+    addEdge(a,b, data){
+      if (!this.adj.has(a)) this.adj.set(a,new Set());
+      if (!this.adj.has(b)) this.adj.set(b,new Set());
+      this.adj.get(a).add(b); this.adj.get(b).add(a);
+      const k=edgeKey(a,b); const prev=this.edges.get(k)||{};
+      this.edges.set(k, Object.assign({}, prev, data||{}));
+    }
+    hasEdge(a,b){ return this.edges.has(edgeKey(a,b)); }
+    getEdgeData(a,b){ return this.edges.get(edgeKey(a,b)) || {}; }
+  }
+  function cycleBasis4(G){
+    const adj=G.adj, cycles=new Set();
+    const norm=(cyc)=>{
+      const r=cyc.slice(); const m=Math.min(...r); const i=r.indexOf(m);
+      const rot=r.slice(i).concat(r.slice(0,i));
+      const rev=[rot[0],rot[3],rot[2],rot[1]];
+      const a=rot.join('-'), b=rev.join('-');
+      return a<b? a : b;
+    };
+    for (const u of adj.keys()){
+      for (const v of adj.get(u)||[]) if (v>u){
+        for (const x of adj.get(u)||[]) if (x>u && x!==v){
+          for (const y of adj.get(v)||[]) if (y>v && y!==u){
+            if ((adj.get(x)||new Set()).has(y)) cycles.add(norm([u,v,y,x]));
+          }
+        }
       }
-    }, 50);
+    }
+    return Array.from(cycles).map(s=>s.split('-').map(Number));
   }
+  // 전역 등록
+  window.MiniGraph = MiniGraph;
+  window.cycleBasis4 = cycleBasis4;
+})();
+
+// ======= 초기화 플래그 =======
+let cvReady=false;
+let srcMat=null;
+
+// ======= 준비 완료 =======
+function onCvReady(){
+  cvReady=true;
+  const runEl=document.getElementById('run');
+  if (runEl) runEl.disabled=false;
+  const st=document.getElementById('status');
+  if (st) st.textContent='준비 완료';
 }
 
-// ---------- Utils ----------
-function matFromImage(img){
-  const mat = cv.imread(img);
-  // mat = RGBA. Convert to RGB for parity w/ Python (which used RGB)
-  let rgb = new cv.Mat();
-  cv.cvtColor(mat, rgb, cv.COLOR_RGBA2RGB);
-  mat.delete();
-  return rgb; // 8UC3
-}
-function toGray(mat){
-  if (mat.type() === cv.CV_8UC1) return mat.clone();
-  let gray = new cv.Mat();
-  cv.cvtColor(mat, gray, cv.COLOR_RGB2GRAY);
-  return gray; // 8UC1
-}
+// ======= 유틸 =======
+function matFromImage(img){ const m=cv.imread(img); let rgb=new cv.Mat(); cv.cvtColor(m,rgb,cv.COLOR_RGBA2RGB); m.delete(); return rgb; }
+function toGray(mat){ if (mat.type()===cv.CV_8UC1) return mat.clone(); let g=new cv.Mat(); cv.cvtColor(mat,g,cv.COLOR_RGB2GRAY); return g; }
 function percentileGray(mat, perc){
-  // Use MatVector as required by OpenCV.js
-  const images = new cv.MatVector();
-  images.push_back(mat);
-  const channels = [0];
-  const mask = new cv.Mat();
-  const hist = new cv.Mat();
-  const histSize = [256];
-  const ranges = [0, 256];
+  const images=new cv.MatVector(); images.push_back(mat);
+  const channels=[0], mask=new cv.Mat(), hist=new cv.Mat(), histSize=[256], ranges=[0,256];
   cv.calcHist(images, channels, mask, hist, histSize, ranges);
-  const total = mat.rows * mat.cols;
-  const target = Math.max(0, Math.min(1, perc/100)) * total;
-  let cum = 0; let thr = 255;
-  for (let i=0;i<256;i++){
-    // hist is CV_32F in OpenCV.js
-    cum += hist.floatAt(i,0);
-    if (cum >= target){ thr = i; break; }
+  const total=mat.rows*mat.cols, target=Math.max(0,Math.min(1,perc/100))*total;
+  let cum=0, thr=255; for (let i=0;i<256;i++){ cum+=hist.floatAt(i,0); if (cum>=target){thr=i;break;} }
+  images.delete(); mask.delete(); hist.delete(); return thr|0;
+}
+function morph(mat, op, kSize=3, iters=1){
+  const kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE,new cv.Size(kSize,kSize));
+  let out=new cv.Mat();
+  if(op==='close') cv.morphologyEx(mat,out,cv.MORPH_CLOSE,kernel,new cv.Point(-1,-1),iters);
+  else if(op==='open') cv.morphologyEx(mat,out,cv.MORPH_OPEN,kernel,new cv.Point(-1,-1),iters);
+  else if(op==='dilate') cv.dilate(mat,out,kernel,new cv.Point(-1,-1),iters);
+  else if(op==='erode') cv.erode(mat,out,kernel,new cv.Point(-1,-1),iters);
+  kernel.delete(); return out;
+}
+function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
+function removeSmallComponents(mask, minArea=100, area_w_wh=false){
+  let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
+  const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
+  let cleaned=new cv.Mat.zeros(mask.rows,mask.cols,cv.CV_8U);
+  for (let i=1;i<n;i++){
+    const area=stats.intAt(i,cv.CC_STAT_AREA);
+    const w=stats.intAt(i,cv.CC_STAT_WIDTH), h=stats.intAt(i,cv.CC_STAT_HEIGHT);
+    const keep=area_w_wh ? (w*h>=minArea) : (area>=minArea);
+    if (keep){
+      for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++)
+        if (labels.intAt(r,c)===i) cleaned.ucharPtr(r,c)[0]=255;
+    }
   }
-  images.delete(); mask.delete(); hist.delete();
-  return thr|0;
+  labels.delete(); stats.delete(); cents.delete(); return cleaned;
+}
+function removeThinComponents(mask, minArea=100){
+  let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
+  const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
+  let cleaned=new cv.Mat.zeros(mask.rows,mask.cols,cv.CV_8U);
+  for (let i=1;i<n;i++){
+    const area=stats.intAt(i,cv.CC_STAT_AREA);
+    const w=stats.intAt(i,cv.CC_STAT_WIDTH), h=stats.intAt(i,cv.CC_STAT_HEIGHT);
+    if (area>=minArea && area>0.1*w*h){
+      for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++)
+        if (labels.intAt(r,c)===i) cleaned.ucharPtr(r,c)[0]=255;
+    }
+  }
+  labels.delete(); stats.delete(); cents.delete(); return cleaned;
 }
 function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
-  const c = new cv.Scalar(
+  const c=new cv.Scalar(
     Array.isArray(color)? (color[0] ?? 255) : 255,
     Array.isArray(color)? (color[1] ?? 255) : 255,
     Array.isArray(color)? (color[2] ?? 255) : 255,
     255
   );
-  let out = mat.clone();
-  for (const l of lines){
-    const [x1,y1,x2,y2] = l;
-    cv.line(out, new cv.Point(x1,y1), new cv.Point(x2,y2), c, thickness, cv.LINE_AA);
-  }
+  let out=mat.clone();
+  for (const l of lines){ const [x1,y1,x2,y2]=l; cv.line(out,new cv.Point(x1,y1),new cv.Point(x2,y2),c,thickness,cv.LINE_AA); }
   return out;
 }
-function canvasFromMat(mat, canvas){
-  cv.imshow(canvas, mat);
-}
-function makeDbgSlot(title){
-  const wrap = document.createElement('div');wrap.className='slot';
-  const h3 = document.createElement('h3');h3.textContent=title;wrap.appendChild(h3);
-  const c = document.createElement('canvas');c.width=10;c.height=10;wrap.appendChild(c);
-  return {wrap, canvas:c};
-}
-
-// ----- Core steps (ported) -----
-function logEdges(gray, thr=0){
-  // Laplacian then threshold by 75th percentile if thr<=0
-  let lap = new cv.Mat();
-  cv.Laplacian(gray, lap, cv.CV_16S, 3, 1, 0, cv.BORDER_DEFAULT);
-  let lapAbs = new cv.Mat();
-  cv.convertScaleAbs(lap, lapAbs);
-  lap.delete();
-  if (thr <= 0){ thr = percentileGray(lapAbs, 75); }
-  let bw = new cv.Mat();
-  cv.threshold(lapAbs, bw, thr, 255, cv.THRESH_BINARY);
-  lapAbs.delete();
-  return bw; // 8UC1
-}
-function brightnessMask(gray, perc=75){
-  const thr = percentileGray(gray, perc);
-  let mask = new cv.Mat();
-  cv.threshold(gray, mask, thr, 255, cv.THRESH_BINARY);
-  return mask;
-}
-function morph(mat, op, kSize=3, iters=1){
-  const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(kSize,kSize));
-  let out = new cv.Mat();
-  if (op === 'close') cv.morphologyEx(mat, out, cv.MORPH_CLOSE, kernel, new cv.Point(-1,-1), iters);
-  else if (op === 'open') cv.morphologyEx(mat, out, cv.MORPH_OPEN, kernel, new cv.Point(-1,-1), iters);
-  else if (op === 'dilate') cv.dilate(mat, out, kernel, new cv.Point(-1,-1), iters);
-  else if (op === 'erode') cv.erode(mat, out, kernel, new cv.Point(-1,-1), iters);
-  kernel.delete();
-  return out;
-}
-function removeSmallComponents(mask, minArea=100, area_w_wh=false){
-  let labels = new cv.Mat(), stats = new cv.Mat(), centroids = new cv.Mat();
-  const n = cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
-  let cleaned = new cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8U);
-  for (let i=1;i<n;i++){
-    const area = stats.intAt(i, cv.CC_STAT_AREA);
-    const width = stats.intAt(i, cv.CC_STAT_WIDTH);
-    const height = stats.intAt(i, cv.CC_STAT_HEIGHT);
-    let keep = area_w_wh ? (width*height >= minArea) : (area >= minArea);
-    if (keep){
-      // copy pixels of this label
-      for (let r=0;r<labels.rows;r++){
-        for (let c=0;c<labels.cols;c++){
-          if (labels.intAt(r,c)===i) cleaned.ucharPtr(r,c)[0] = 255;
-        }
-      }
-    }
-  }
-  labels.delete(); stats.delete(); centroids.delete();
-  return cleaned;
-}
-function removeThinComponents(mask, minArea=100){
-  // Keep components with area >= minArea and density > 0.1 (area > 0.1*w*h)
-  let labels = new cv.Mat(), stats = new cv.Mat(), centroids = new cv.Mat();
-  const n = cv.connectedComponentsWithStats(mask, labels, stats, centroids, 4, cv.CV_32S);
-  let cleaned = new cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8U);
-  for (let i=1;i<n;i++){
-    const area = stats.intAt(i, cv.CC_STAT_AREA);
-    const width = stats.intAt(i, cv.CC_STAT_WIDTH);
-    const height = stats.intAt(i, cv.CC_STAT_HEIGHT);
-    if (area >= minArea && area > 0.1*width*height){
-      for (let r=0;r<labels.rows;r++){
-        for (let c=0;c<labels.cols;c++){
-          if (labels.intAt(r,c)===i) cleaned.ucharPtr(r,c)[0] = 255;
-        }
-      }
-    }
-  }
-  labels.delete(); stats.delete(); centroids.delete();
-  return cleaned;
-}
+function canvasFromMat(mat, canvas){ cv.imshow(canvas, mat); }
+function makeDbgSlot(title){ const wrap=document.createElement('div'); wrap.className='slot'; const h3=document.createElement('h3'); h3.textContent=title; wrap.appendChild(h3); const c=document.createElement('canvas'); wrap.appendChild(c); return {wrap,canvas:c}; }
 function sampleLineVals(mat, line){
-  // Supports CV_8U (ucharAt), CV_32F (floatAt), CV_32S (intAt)
-  const [x1,y1,x2,y2] = line.map(v=>Math.round(v));
-  const dx = x2 - x1, dy = y2 - y1;
-  const length = Math.max(1, Math.round(Math.hypot(dx,dy)) + 1);
-  const xs = [], ys = [], vals = [];
-  const type = mat.type();
-  const is32F = type === cv.CV_32F;
-  const is32S = type === cv.CV_32S;
-  for (let k=0;k<length;k++){
-    const x = Math.round(x1 + (dx)*(k/(length-1)));
-    const y = Math.round(y1 + (dy)*(k/(length-1)));
+  const [x1,y1,x2,y2]=line.map(v=>Math.round(v));
+  const dx=x2-x1, dy=y2-y1, length=Math.max(1,Math.round(Math.hypot(dx,dy))+1);
+  const xs=[], ys=[], vals=[]; const type=mat.type(); const is32F=(type===cv.CV_32F), is32S=(type===cv.CV_32S);
+  for(let k=0;k<length;k++){
+    const x=Math.round(x1+dx*(k/(length-1))); const y=Math.round(y1+dy*(k/(length-1)));
     if (x>=0 && x<mat.cols && y>=0 && y<mat.rows){
       xs.push(x); ys.push(y);
-      let v;
-      if (is32F) v = mat.floatAt(y,x);
-      else if (is32S) v = mat.intAt(y,x);
-      else v = mat.ucharAt(y,x);
-      vals.push(v);
+      vals.push(is32F? mat.floatAt(y,x) : is32S? mat.intAt(y,x) : mat.ucharAt(y,x));
     }
   }
-  return {vals, xs, ys};
+  return {vals,xs,ys};
 }
 function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
-  const [H,W] = imgShape;
-  let mask = new cv.Mat.zeros(H,W,cv.CV_8U);
-  const eps=1e-9;
-  const toUnit=(vx,vy)=>{const n=Math.hypot(vx,vy);return n<eps? [0,0]:[vx/n,vy/n];};
-  for (let i=0;i<lines.length;i++){
-    const [x1,y1,x2,y2] = lines[i];
-    const ui = toUnit(x2-x1,y2-y1);
-    for (let j=i+1;j<lines.length;j++){
-      const [x3,y3,x4,y4] = lines[j];
-      const uj = toUnit(x4-x3,y4-y3);
-      const cos = Math.abs(ui[0]*uj[0] + ui[1]*uj[1]);
-      const theta = (180/Math.PI) * Math.acos(Math.min(1,Math.max(0,cos)));
-      if (theta < angleDeg) continue;
-      const den = (x2-x1)*(y4-y3) - (y2-y1)*(x4-x3);
-      if (Math.abs(den) < eps) continue;
-      const t = ((x3-x1)*(y4-y3) - (y3-y1)*(x4-x3)) / den;
-      const X = x1 + t*(x2-x1); const Y = y1 + t*(y2-y1);
-      const cx = Math.round(X), cy=Math.round(Y);
-      const axes = new cv.Size( (brushSize*2)|0, brushSize|0 );
-      cv.ellipse(mask, new cv.Point(cx,cy), axes, 0, 0, 360, new cv.Scalar(255,255,255,255), -1);
+  const [H,W]=imgShape; let mask=new cv.Mat.zeros(H,W,cv.CV_8U); const eps=1e-9;
+  const unit=(vx,vy)=>{const n=Math.hypot(vx,vy);return n<eps?[0,0]:[vx/n,vy/n];};
+  for(let i=0;i<lines.length;i++){
+    const [x1,y1,x2,y2]=lines[i]; const ui=unit(x2-x1,y2-y1);
+    for(let j=i+1;j<lines.length;j++){
+      const [x3,y3,x4,y4]=lines[j]; const uj=unit(x4-x3,y4-y3);
+      const cos=Math.abs(ui[0]*uj[0]+ui[1]*uj[1]); const theta=(180/Math.PI)*Math.acos(Math.min(1,Math.max(0,cos)));
+      if(theta<angleDeg) continue;
+      const den=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3); if(Math.abs(den)<eps) continue;
+      const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/den; const X=x1+t*(x2-x1), Y=y1+t*(y2-y1);
+      const cx=Math.round(X), cy=Math.round(Y);
+      const axes=new cv.Size((brushSize*2)|0, brushSize|0);
+      cv.ellipse(mask,new cv.Point(cx,cy),axes,0,0,360,new cv.Scalar(255,255,255,255),-1);
     }
   }
-  let labels = new cv.Mat(); let stats = new cv.Mat(); let cents = new cv.Mat();
-  const n = cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
+  let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
+  const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
   mask.delete(); stats.delete(); cents.delete();
-  return {count: Math.max(n-1,0), labels};
+  return {count:Math.max(n-1,0), labels};
 }
 function clusterLinesByLabel(lines, labels){
-  const clusters = new Map();
-  for (let idx=0; idx<lines.length; idx++){
-    const {vals} = sampleLineVals(labels, lines[idx]);
-    const s = new Set();
-    for (const v of vals){ if ((v|0) >= 1) s.add(v|0); }
-    const arr = Array.from(s).sort((a,b)=>a-b);
-    const key = arr.join('-');
+  const clusters=new Map();
+  for(let idx=0; idx<lines.length; idx++){
+    const {vals}=sampleLineVals(labels, lines[idx]); const s=new Set();
+    for (const v of vals){ if ((v|0)>=1) s.add(v|0); }
+    const key=[...s].sort((a,b)=>a-b).join('-');
     if (!clusters.has(key)) clusters.set(key, []);
     clusters.get(key).push(idx);
   }
-  // remove keys that are proper subsets of others
-  const keys = Array.from(clusters.keys());
-  const toRemove = new Set();
-  for (let i=0;i<keys.length;i++){
-    for (let j=0;j<keys.length;j++) if (i!==j){
-      const ai=keys[i].split('-').filter(x=>x);
-      const aj=keys[j].split('-').filter(x=>x);
-      const sub = ai.every(v=>aj.includes(v)) && aj.length>ai.length;
-      if (sub) { toRemove.add(keys[i]); break; }
-    }
+  const keys=[...clusters.keys()], rm=new Set();
+  for (let i=0;i<keys.length;i++) for (let j=0;j<keys.length;j++) if (i!==j){
+    const ai=keys[i].split('-').filter(Boolean), aj=keys[j].split('-').filter(Boolean);
+    const sub=ai.every(v=>aj.includes(v)) && aj.length>ai.length; if (sub){ rm.add(keys[i]); break; }
   }
-  for (const k of toRemove) clusters.delete(k);
-  return clusters; // Map<labelKey -> [lineIdx,...]>
+  for (const k of rm) clusters.delete(k);
+  return clusters;
 }
 function buildLabelGraphFromLines(lines, labels){
-  const G = new jsnx.Graph();
+  const G=new MiniGraph();
   for (let idx=0; idx<lines.length; idx++){
-    const {vals} = sampleLineVals(labels, lines[idx]);
-    const seq = vals.map(v=>v|0).filter(v=>v>=1);
+    const {vals}=sampleLineVals(labels, lines[idx]); const seq=vals.map(v=>v|0).filter(v=>v>=1);
     if (seq.length<2) continue;
-    // dedupe consecutive
-    const uniq=[]; for (let k=0;k<seq.length;k++){ if (k===0||seq[k]!==seq[k-1]) uniq.push(seq[k]); }
+    const uniq=[]; for(let k=0;k<seq.length;k++){ if (k===0 || seq[k]!==seq[k-1]) uniq.push(seq[k]); }
     for (let k=0;k<uniq.length-1;k++){
       const a=uniq[k], b=uniq[k+1]; if (a===b) continue;
-      if (G.hasEdge(a,b)){
-        const curr = (G.getEdgeData(a,b).count || 0) + 1;
-        G.addEdge(a,b,{count:curr});
-      } else { G.addEdge(a,b,{count:1}); }
+      if (G.hasEdge(a,b)){ const curr=(G.getEdgeData(a,b).count||0)+1; G.addEdge(a,b,{count:curr}); }
+      else G.addEdge(a,b,{count:1});
     }
   }
   return G;
 }
-function abcline(line){
-  const [x1,y1,x2,y2] = line.map(Number);const dx=x2-x1, dy=y2-y1; const a=dy, b=-dx, c=-(a*x1 + b*y1); return {a,b,c};
-}
-function intersectLines(l1,l2){
-  const A=abcline(l1), B=abcline(l2); const det = A.a*B.b - B.a*A.b; if (Math.abs(det)<1e-9) return [NaN,NaN];
-  const x = (A.b*B.c - B.b*A.c)/det; const y = (A.c*B.a - B.c*A.a)/det; return [x,y];
-}
+function abcline(line){ const [x1,y1,x2,y2]=line.map(Number); const dx=x2-x1, dy=y2-y1; const a=dy,b=-dx,c=-(a*x1+b*y1); return {a,b,c}; }
+function intersectLines(l1,l2){ const A=abcline(l1), B=abcline(l2); const det=A.a*B.b-B.a*A.b; if (Math.abs(det)<1e-9) return [NaN,NaN]; const x=(A.b*B.c-B.b*A.c)/det, y=(A.c*B.a-B.c*A.a)/det; return [x,y]; }
 function cornersFromCycles(linesBest, cycles){
-  const quads = cycles.filter(c=>c.length===4);
-  const corners = [];
+  const quads=cycles.filter(c=>c.length===4); const corners=[];
   for (const cyc of quads){
     const edges=[[cyc[0],cyc[1]],[cyc[1],cyc[2]],[cyc[2],cyc[3]],[cyc[3],cyc[0]]];
     const lines=[]; let ok=true;
-    for (const [u,v] of edges){
-      const key1=`${Math.min(u,v)}-${Math.max(u,v)}`; if (!linesBest.has(key1)){ ok=false; break; }
-      lines.push(linesBest.get(key1));
-    }
-    if (!ok) { corners.push([[NaN,NaN],[NaN,NaN],[NaN,NaN],[NaN,NaN]]); continue; }
-    const c4=[
+    for (const [u,v] of edges){ const key=(Math.min(u,v)+'-'+Math.max(u,v)); if (!linesBest.has(key)){ ok=false; break; } lines.push(linesBest.get(key)); }
+    if (!ok){ corners.push([[NaN,NaN],[NaN,NaN],[NaN,NaN],[NaN,NaN]]); continue; }
+    corners.push([
       intersectLines(lines[3],lines[0]),
       intersectLines(lines[0],lines[1]),
       intersectLines(lines[1],lines[2]),
       intersectLines(lines[2],lines[3]),
-    ];
-    corners.push(c4);
+    ]);
   }
-  return corners; // array of 4x2
+  return corners;
 }
 function polygonArea(pts){
   if (pts.some(p=>!isFinite(p[0])||!isFinite(p[1]))) return 0;
-  let s=0; for (let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; s += x1*y2 - y1*x2; }
+  let s=0; for (let i=0;i<pts.length;i++){ const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length]; s+=x1*y2 - y1*x2; }
   return Math.abs(0.5*s);
 }
 function orderCornersTLTRBRBL(pts){
-  // pts: [[x,y],...]
-  const arr = pts.map(p=>({p, s:p[0]+p[1], d:p[0]-p[1]}));
-  const tl = arr.reduce((a,b)=>a.s<b.s?a:b).p;
-  const br = arr.reduce((a,b)=>a.s>b.s?a:b).p;
-  const tr = arr.reduce((a,b)=>a.d<b.d?a:b).p;
-  const bl = arr.reduce((a,b)=>a.d>b.d?a:b).p;
+  const arr=pts.map(p=>({p, s:p[0]+p[1], d:p[0]-p[1]}));
+  const tl=arr.reduce((a,b)=>a.s<b.s?a:b).p, br=arr.reduce((a,b)=>a.s>b.s?a:b).p;
+  const tr=arr.reduce((a,b)=>a.d<b.d?a:b).p, bl=arr.reduce((a,b)=>a.d>b.d?a:b).p;
   return [tl,tr,br,bl];
 }
-function projectQuad(H, quad){
-  // quad: [[X,Y],...]
-  const src = cv.matFromArray(4,1,cv.CV_32FC2, quad.flat());
-  let out = new cv.Mat();
-  cv.perspectiveTransform(src, out, H);
-  const arr=[]; for (let i=0;i<4;i++){ arr.push([out.floatAt(i,0), out.floatAt(i,1)]); }
-  src.delete(); out.delete(); return arr;
+function normalizeForView(mat32f){
+  const mm=cv.minMaxLoc(mat32f); const maxv=(mm && typeof mm.maxVal==='number')? mm.maxVal : 0;
+  let out=new cv.Mat(); const scale=maxv>0? 255.0/maxv : 1.0; mat32f.convertTo(out, cv.CV_8U, scale, 0); return out;
 }
-function getPerspectiveTransformFromPts(srcPts, dstPts){
-  const src = cv.matFromArray(4,1,cv.CV_32FC2, srcPts.flat());
-  const dst = cv.matFromArray(4,1,cv.CV_32FC2, dstPts.flat());
-  const H = cv.getPerspectiveTransform(src, dst);
-  src.delete(); dst.delete();
-  return H;
-}
-function warpByPts(img, srcPts, size){
-  const dstPts = [[0,0],[size-1,0],[size-1,size-1],[0,size-1]];
-  const H = getPerspectiveTransformFromPts(srcPts, dstPts);
-  let warped = new cv.Mat();
-  cv.warpPerspective(img, warped, H, new cv.Size(size,size), cv.INTER_LINEAR, cv.BORDER_REPLICATE);
-  H.delete();
-  return warped;
+function labelToColor(labels){
+  let out=new cv.Mat.zeros(labels.rows,labels.cols,cv.CV_8UC3);
+  let maxLbl=0; for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++) maxLbl=Math.max(maxLbl, labels.intAt(r,c));
+  const colors={0:[0,0,0]}; for (let i=1;i<=maxLbl;i++) colors[i]=[40+Math.random()*215|0,40+Math.random()*215|0,40+Math.random()*215|0];
+  for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++){ const v=labels.intAt(r,c); const col=colors[v]||[0,0,0]; const p=out.ucharPtr(r,c); p[0]=col[0]; p[1]=col[1]; p[2]=col[2]; }
+  return out;
 }
 
+// ======= 파이프라인 =======
 async function detectAndRecognize(imgRGB, opts){
-  const H = imgRGB.rows, W = imgRGB.cols;
-  const dbg = [];
-
-  // Gray
-  const gray = toGray(imgRGB);
+  const H=imgRGB.rows, W=imgRGB.cols; const dbg=[];
+  const gray=toGray(imgRGB);
 
   // LoG edges
-  const e_log = logEdges(gray, 0);
-  // visualize
-  let vis_log = new cv.Mat();
-  cv.cvtColor(imgRGB, vis_log, cv.COLOR_RGB2RGBA);
-  let mask3 = new cv.Mat(); cv.cvtColor(e_log, mask3, cv.COLOR_GRAY2RGBA);
-  // (for compact UI we skip blending here)
+  let lap=new cv.Mat(); cv.Laplacian(gray,lap,cv.CV_16S,3,1,0,cv.BORDER_DEFAULT);
+  let lapAbs=new cv.Mat(); cv.convertScaleAbs(lap,lapAbs); lap.delete();
+  let thr=percentileGray(lapAbs,75); let e_log=new cv.Mat(); cv.threshold(lapAbs,e_log,thr,255,cv.THRESH_BINARY); lapAbs.delete();
   dbg.push(['LoG edges', e_log.clone()]);
 
-  // brightness mask
-  const bmask90 = brightnessMask(gray, 90);
+  const e_close=morph(e_log,'close',3,1);
+  let flat=new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
+  const minAreaThin=(H*W/2000)|0; let flat2=removeThinComponents(flat, minAreaThin); flat.delete();
+  const ksize=(Math.max(H,W)/200)|0; const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1);
+  let flatNei=new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
+  const bmask75=brightnessMask(gray,75);
+  let invB=new cv.Mat(); cv.bitwise_not(bmask75, invB); let flatNeiDark=new cv.Mat(); cv.bitwise_and(flatNei, invB, flatNeiDark); invB.delete();
+  let flat3=new cv.Mat(); cv.bitwise_or(flat2, flatNeiDark, flat3); flatNeiDark.delete(); flat2.delete();
+  const flatClean=removeThinComponents(flat3, (H*W/50)|0); flat3.delete();
 
-  // morph close
-  const e_close = morph(e_log, 'close', 3, 1);
-
-  // invert & remove thin
-  let flat = new cv.Mat(); cv.bitwise_not(e_close, flat);
-  e_close.delete();
-  const minAreaThin = Math.floor(H*W/2000);
-  let flat2 = removeThinComponents(flat, minAreaThin); flat.delete();
-  const ksize = Math.max(H,W) / 200 |0;
-  const flatDil = morph(flat2, 'dilate', Math.max(1,ksize), 1);
-  let flatNei = new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei);
-  flatDil.delete();
-  const bmask75 = brightnessMask(gray, 75);
-  let flatNeiDark = new cv.Mat(); let invB = new cv.Mat(); cv.bitwise_not(bmask75, invB); cv.bitwise_and(flatNei, invB, flatNeiDark);
-  invB.delete();
-  let flat3 = new cv.Mat(); cv.bitwise_or(flat2, flatNeiDark, flat3);
-  flatNeiDark.delete(); flat2.delete();
-  const flatClean = removeThinComponents(flat3, Math.floor(H*W/50)); flat3.delete();
-
-  // keep top-2 non-flat (similar to Python cc filtering)
-  let invFlat = new cv.Mat(); cv.bitwise_not(flatClean, invFlat);
-  let labels = new cv.Mat(), stats = new cv.Mat(), cents = new cv.Mat();
-  const ncc = cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
-  const areas = []; for (let i=1;i<ncc;i++) areas.push({i, area:stats.intAt(i,cv.CC_STAT_AREA)});
-  areas.sort((a,b)=>a.area-b.area);
-  const top2 = areas.slice(-2).map(o=>o.i);
-  let maskTop2 = new cv.Mat.zeros(H,W,cv.CV_8U);
-  for (let r=0;r<labels.rows;r++){
-    for (let c=0;c<labels.cols;c++){
-      const v = labels.intAt(r,c);
-      if (top2.includes(v)) maskTop2.ucharPtr(r,c)[0]=255;
-    }
-  }
-  let flatRefined = new cv.Mat(); cv.bitwise_not(maskTop2, flatRefined);
-  dbg.push(['flat_refined_cc', overlayMask(imgRGB, flatRefined)]);
+  // top2 유지
+  let invFlat=new cv.Mat(); cv.bitwise_not(flatClean, invFlat);
+  let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
+  const ncc=cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
+  const areas=[]; for (let i=1;i<ncc;i++) areas.push({i, area:stats.intAt(i,cv.CC_STAT_AREA)});
+  areas.sort((a,b)=>a.area-b.area); const top2=areas.slice(-2).map(o=>o.i);
+  let maskTop2=new cv.Mat.zeros(H,W,cv.CV_8U);
+  for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++){ const v=labels.intAt(r,c); if (top2.includes(v)) maskTop2.ucharPtr(r,c)[0]=255; }
+  let flatRefined=new cv.Mat(); cv.bitwise_not(maskTop2, flatRefined);
+  dbg.push(['flat_refined_cc', flatRefined.clone()]);
   labels.delete(); stats.delete(); cents.delete(); maskTop2.delete(); invFlat.delete();
 
-  // neighborhood strip
-  const flatDil2 = morph(flatRefined, 'dilate', Math.max(2*ksize,1), 1);
-  let flatNei2 = new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
-  dbg.push(['flat_neighbor', overlayMask(imgRGB, flatNei2)]);
-  const bmask75b = brightnessMask(gray, 75);
-  const bmaskDil = morph(bmask75b, 'dilate', Math.max(6*ksize,1), 1);
-  let eRef = new cv.Mat(); cv.bitwise_and(flatNei2, bmaskDil, eRef);
-  eRef = morph(eRef, 'open', Math.max(ksize/2|0,1), 1);
-  const eRefClean = removeSmallComponents(eRef, Math.floor(H*W/20), true); eRef.delete();
-  let eRef2 = new cv.Mat(); cv.bitwise_and(eRefClean, bmask75b, eRef2); eRefClean.delete();
-  dbg.push(['log_refined', overlayMask(imgRGB, eRef2)]);
+  // 이웃 스트립 → 밝기 교차
+  const flatDil2=morph(flatRefined,'dilate',Math.max(2*ksize,1),1);
+  let flatNei2=new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
+  dbg.push(['flat_neighbor', flatNei2.clone()]);
+  const bmaskDil=morph(bmask75,'dilate',Math.max(6*ksize,1),1);
+  let eRef=new cv.Mat(); cv.bitwise_and(flatNei2, bmaskDil, eRef);
+  eRef = morph(eRef,'open',Math.max(ksize/2|0,1),1);
+  const eRefClean=removeSmallComponents(eRef,(H*W/20)|0,true); eRef.delete();
+  let eRef2=new cv.Mat(); cv.bitwise_and(eRefClean, bmask75, eRef2); eRefClean.delete();
+  dbg.push(['log_refined', eRef2.clone()]);
 
   // HoughLinesP
-  let linesP = new cv.Mat();
+  let linesP=new cv.Mat();
   cv.HoughLinesP(eRef2, linesP, 1.0, Math.PI/720, Math.max(H,W)/8|0, Math.max(H,W)/6|0, Math.max(H,W)/6|0);
-  const lines = [];
-  for (let i=0;i<linesP.rows;i++){
-    const x1=linesP.intAt(i,0), y1=linesP.intAt(i,1), x2=linesP.intAt(i,2), y2=linesP.intAt(i,3);
-    lines.push([x1,y1,x2,y2]);
-  }
+  const lines=[]; for(let i=0;i<linesP.rows;i++){ lines.push([linesP.intAt(i,0),linesP.intAt(i,1),linesP.intAt(i,2),linesP.intAt(i,3)]); }
   linesP.delete();
-  const visHough = drawLinesOn(imgRGB, lines, [255,128,0], 2); // debug
-  dbg.push(['hough', visHough]);
+  dbg.push(['hough', drawLinesOn(imgRGB, lines, [255,128,0], 2)]);
 
-  // intersections → labels
-  const {count, labels: lblMap} = countIntersectionsByPaint(lines, opts.brush, opts.angleDeg, [H,W]);
+  // 교차점 라벨
+  const {labels: lblMap} = countIntersectionsByPaint(lines, Number(document.getElementById('brush').value)||5, Number(document.getElementById('angleDeg').value)||45, [H,W]);
   dbg.push(['intersection_map', labelToColor(lblMap)]);
 
-  // clusters (by unique label-sets sampled along line)
-  const clusters = clusterLinesByLabel(lines, lblMap);
-  // visualize clusters
-  const palette = [...Array(30)].map(()=>[rand(30,255),rand(30,255),rand(30,255)]);
-  let imgVis = imgRGB.clone(); let ci=0;
-  for (const [key, arr] of clusters.entries()){
-    const ls = arr.map(idx=>lines[idx]);
-    imgVis = drawLinesOn(imgVis, ls, palette[ci%palette.length], 3); ci++;
-  }
+  // 라벨 클러스터
+  const clusters=clusterLinesByLabel(lines, lblMap);
+  const palette=[...Array(30)].map(()=>[40+Math.random()*215|0,40+Math.random()*215|0,40+Math.random()*215|0]);
+  let imgVis=imgRGB.clone(); let ci=0;
+  for (const [,arr] of clusters.entries()){ const ls=arr.map(i=>lines[i]); imgVis=drawLinesOn(imgVis, ls, palette[ci%palette.length], 3); ci++; }
   dbg.push(['cluster', imgVis]);
 
-  // distance transform (of refined edges)
-  let dist = new cv.Mat();
-  // Need white-for-foreground; ensure eRef2 is 8U with foreground=255
-  cv.distanceTransform(eRef2, dist, cv.DIST_L2, 3);
+  // 거리변환 → 베스트 라인
+  let dist=new cv.Mat(); cv.distanceTransform(eRef2, dist, cv.DIST_L2, 3);
   dbg.push(['e_log_dist', normalizeForView(dist)]);
-
-  // pick best line per cluster by sum of distance samples
-  const linesBest = new Map();
+  const linesBest=new Map();
   for (const [key, arr] of clusters.entries()){
     let best=null, bestScore=-1e9;
     for (const idx of arr){
-      const line = lines[idx];
-      const samples = sampleLineVals(dist, line).vals;
-      let score=0; for (let k=0;k<samples.length;k++){ score += samples[k]; }
+      const line=lines[idx]; const samples=sampleLineVals(dist, line).vals;
+      let score=0; for (let k=0;k<samples.length;k++) score+=samples[k];
       if (score>bestScore){ bestScore=score; best=line; }
     }
-    // key is like "1-3-7" → store by every pair present (or by whole key). Use pair set (min,max) for lookup.
-    const lbls = key.split('-').filter(x=>x).map(Number).sort((a,b)=>a-b);
-    for (let i=0;i<lbls.length;i++){
-      for (let j=i+1;j<lbls.length;j++){
-        linesBest.set(`${lbls[i]}-${lbls[j]}`, best);
-      }
-    }
+    const lbls=key.split('-').filter(Boolean).map(Number).sort((a,b)=>a-b);
+    for (let i=0;i<lbls.length;i++) for (let j=i+1;j<lbls.length;j++)
+      linesBest.set(`${lbls[i]}-${lbls[j]}`, best);
+  }
+  dist.delete(); lblMap.delete();
+
+  // 그래프 + 4사이클
+  const G=buildLabelGraphFromLines(lines, new cv.Mat());
+  const cycles=cycleBasis4(G);
+
+  // 코너 후보 → 가장 큰 사각형
+  const C=cornersFromCycles(linesBest, cycles);
+  let bestQuad=null, bestArea=0; for (const c of C){ const a=polygonArea(c); if (a>bestArea){bestArea=a; bestQuad=c;} }
+  if (!bestQuad) return {corners:null, dbg};
+
+  const ordered=orderCornersTLTRBRBL(bestQuad);
+
+  // Ally/Enemy 워프
+  const sizeFull=opts.sizeFull|0;
+  const borderLen=1.0, marginAE=0.125*borderLen;
+  const allyBorder=[[0,0],[1,0],[1,1],[0,1]];
+  const enemyBorder=[[0,-marginAE-1],[1,-marginAE-1],[1,-marginAE],[0,-marginAE]];
+
+  function getPerspectiveTransformFromPts(srcPts, dstPts){
+    const src=cv.matFromArray(4,1,cv.CV_32FC2, srcPts.flat());
+    const dst=cv.matFromArray(4,1,cv.CV_32FC2, dstPts.flat());
+    const H=cv.getPerspectiveTransform(src,dst); src.delete(); dst.delete(); return H;
+  }
+  function projectQuad(H, quad){
+    const src=cv.matFromArray(4,1,cv.CV_32FC2, quad.flat()); let out=new cv.Mat();
+    cv.perspectiveTransform(src,out,H); const arr=[]; for (let i=0;i<4;i++) arr.push([out.floatAt(i,0), out.floatAt(i,1)]);
+    src.delete(); out.delete(); return arr;
+  }
+  function warpByPts(img, srcPts, size){
+    const dstPts=[[0,0],[size-1,0],[size-1,size-1],[0,size-1]];
+    const H=getPerspectiveTransformFromPts(srcPts,dstPts); let warped=new cv.Mat();
+    cv.warpPerspective(img,warped,H,new cv.Size(size,size),cv.INTER_LINEAR,cv.BORDER_REPLICATE); H.delete(); return warped;
   }
 
-  // build graph + cycles
-  const G = buildLabelGraphFromLines(lines, lblMap);
-  const cycles = jsnx.cycleBasis(G);
+  const H0=getPerspectiveTransformFromPts(allyBorder, ordered);
+  const allyInImg=projectQuad(H0, allyBorder);
+  const enemyInImg=projectQuad(H0, enemyBorder);
+  H0.delete();
 
-  // corners from cycles and choose largest quad
-  const C = cornersFromCycles(linesBest, cycles);
-  let bestQuad=null, bestArea=0;
-  for (const c of C){ const a = polygonArea(c); if (a>bestArea){bestArea=a; bestQuad=c;} }
-  lblMap.delete(); dist.delete();
+  const allyWarp=warpByPts(imgRGB, allyInImg, sizeFull);
+  const enemyWarp=warpByPts(imgRGB, enemyInImg, sizeFull);
 
-  if (!bestQuad){
-    return {corners:null, dbg};
-  }
-  const ordered = orderCornersTLTRBRBL(bestQuad);
-
-  // Recognize formations (ally border used as src -> warp)
-  const sizeFull = opts.sizeFull|0, sizePatch = opts.sizePatch|0;
-
-  // Ally/Enemy border quads in world space (unit coords)
-  const borderLen = 1.0, marginAE = 0.125*borderLen, marginBL=0.06*borderLen;
-  const allyBorder = [[0,0],[1,0],[1,1],[0,1]];
-  const enemyBorder = [[0,-marginAE-1],[1,-marginAE-1],[1,-marginAE],[0,-marginAE]];
-
-  // For simple projection we approximate with a single homography H0 mapping world->image using ally border
-  const HwarpAlly = getPerspectiveTransformFromPts(ordered, [[0,0],[sizeFull-1,0],[sizeFull-1,sizeFull-1],[0,sizeFull-1]]);
-  // But we need source pts for ally/enemy in image coordinates; reuse ally perspective then re-project world quads via inverse
-  const H0 = getPerspectiveTransformFromPts(allyBorder, ordered);
-  const allyInImg = projectQuad(H0, allyBorder);
-  const enemyInImg = projectQuad(H0, enemyBorder);
-
-  const allyWarp = warpByPts(imgRGB, allyInImg, sizeFull);
-  const enemyWarp = warpByPts(imgRGB, enemyInImg, sizeFull);
-
-  // NOTE: For brevity, per-cell troops/hero crops from Python are omitted in this browser port.
   return {corners:ordered, ally:allyWarp, enemy:enemyWarp, dbg};
 }
 
-// ---- tiny helpers for visualization ----
-function overlayMask(imgRGB, mask8u){
-  let rgba = new cv.Mat(); cv.cvtColor(imgRGB, rgba, cv.COLOR_RGB2RGBA);
-  let m3 = new cv.Mat(); cv.cvtColor(mask8u, m3, cv.COLOR_GRAY2RGBA);
-  // Simple: show mask as grayscale image instead of alpha blend for performance
-  m3.delete();
-  return mask8u.clone();
-}
-function labelToColor(labels){
-  // Map label (int) to random color for view
-  let out = new cv.Mat.zeros(labels.rows, labels.cols, cv.CV_8UC3);
-  const colors = {0:[0,0,0]};
-  let maxLbl=0; for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++) maxLbl=Math.max(maxLbl, labels.intAt(r,c));
-  for (let i=1;i<=maxLbl;i++) colors[i] = [rand(40,255), rand(40,255), rand(40,255)];
-  for (let r=0;r<labels.rows;r++){
-    for (let c=0;c<labels.cols;c++){
-      const v = labels.intAt(r,c); const col = colors[v]||[0,0,0];
-      out.ucharPtr(r,c)[0]=col[0]; out.ucharPtr(r,c)[1]=col[1]; out.ucharPtr(r,c)[2]=col[2];
-    }
-  }
-  return out;
-}
-function normalizeForView(mat32f){
-  // OpenCV.js: cv.minMaxLoc returns an object {minVal,maxVal,minLoc,maxLoc}
-  const mm = cv.minMaxLoc(mat32f);
-  const maxv = (mm && typeof mm.maxVal === 'number') ? mm.maxVal : 0;
-  let out = new cv.Mat();
-  const scale = maxv > 0 ? 255.0 / maxv : 1.0;
-  mat32f.convertTo(out, cv.CV_8U, scale, 0);
-  return out;
-}
-const rand=(a,b)=>Math.floor(a + Math.random()*(b-a+1));
-
-// ---------- UI wiring ----------
-const fileInput = document.getElementById('file');
-fileInput.addEventListener('change', e => {
-  const f = e.target.files[0]; if (!f) return;
-  const img = new Image(); img.onload = ()=>{ srcImg = img; if (srcMat) srcMat.delete(); srcMat = matFromImage(img); drawOriginal(); }
-  img.src = URL.createObjectURL(f);
+// ======= UI =======
+const fileInput=document.getElementById('file');
+fileInput.addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const img=new Image(); img.onload=()=>{ if (srcMat) srcMat.delete(); srcMat=matFromImage(img);
+    const c=document.getElementById('cOrig'); c.width=srcMat.cols; c.height=srcMat.rows; canvasFromMat(srcMat,c);
+  };
+  img.src=URL.createObjectURL(f);
 });
-function drawOriginal(){ if (!srcMat) return; const c=document.getElementById('cOrig'); c.width=srcMat.cols; c.height=srcMat.rows; canvasFromMat(srcMat, c); }
 
-const runBtn = document.getElementById('run');
-runBtn.addEventListener('click', async () => {
-  if (!srcMat) { alert('이미지를 선택하세요.'); return; }
-  runBtn.disabled = true; document.getElementById('status').textContent='실행 중…';
+document.getElementById('run').addEventListener('click', async ()=>{
+  if (!srcMat){ alert('이미지를 선택하세요.'); return; }
+  const runBtn=document.getElementById('run'); const st=document.getElementById('status');
+  runBtn.disabled=true; st.textContent='실행 중…';
   try{
-    const angleDeg = Number(document.getElementById('angleDeg').value)||45;
-    const brush = Number(document.getElementById('brush').value)||5;
-    const sizeFull = Number(document.getElementById('sizeFull').value)||1024;
-    const sizePatch = Number(document.getElementById('sizePatch').value)||32;
-    const res = await detectAndRecognize(srcMat, {angleDeg, brush, sizeFull, sizePatch});
+    const angleDeg=Number(document.getElementById('angleDeg').value)||45;
+    const brush=Number(document.getElementById('brush').value)||5;
+    const sizeFull=Number(document.getElementById('sizeFull').value)||1024;
+    const sizePatch=Number(document.getElementById('sizePatch').value)||32;
 
-    // Debug panels
-    const grid = document.getElementById('dbgGrid'); grid.innerHTML='';
+    const res=await detectAndRecognize(srcMat, {angleDeg,brush,sizeFull,sizePatch});
+
+    const grid=document.getElementById('dbgGrid'); grid.innerHTML='';
     for (const [title, mat] of res.dbg){
-      const {wrap, canvas} = makeDbgSlot(title); grid.appendChild(wrap);
-      canvas.width = mat.cols; canvas.height = mat.rows; canvasFromMat(mat, canvas); mat.delete();
+      const {wrap, canvas}=makeDbgSlot(title); grid.appendChild(wrap);
+      canvas.width=mat.cols; canvas.height=mat.rows; canvasFromMat(mat,canvas); mat.delete();
     }
-
-    // Overlay lines / clusters already included in dbg ('cluster')
-    const dbgFinal = res.dbg.find(d=>d[0]==='cluster');
+    const dbgFinal=res.dbg.find(d=>d[0]==='cluster');
     if (dbgFinal){ const c=document.getElementById('cDebug'); c.width=dbgFinal[1].cols; c.height=dbgFinal[1].rows; canvasFromMat(dbgFinal[1], c); dbgFinal[1].delete(); }
 
-    // Ally/Enemy
-    const cA=document.getElementById('cAlly'); const cE=document.getElementById('cEnemy');
-    if (res.ally){ cA.width=res.ally.cols; cA.height=res.ally.rows; canvasFromMat(res.ally, cA); res.ally.delete(); }
-    if (res.enemy){ cE.width=res.enemy.cols; cE.height=res.enemy.rows; canvasFromMat(res.enemy, cE); res.enemy.delete(); }
+    if (res.ally){ const cA=document.getElementById('cAlly'); cA.width=res.ally.cols; cA.height=res.ally.rows; canvasFromMat(res.ally,cA); res.ally.delete(); }
+    if (res.enemy){ const cE=document.getElementById('cEnemy'); cE.width=res.enemy.cols; cE.height=res.enemy.rows; canvasFromMat(res.enemy,cE); res.enemy.delete(); }
 
-    document.getElementById('status').textContent = res.corners? '완료' : '코너를 찾지 못했습니다';
+    st.textContent = res.corners ? '완료' : '코너를 찾지 못했습니다';
   }catch(err){
     console.error(err);
     alert('오류가 발생했습니다: '+err.message);
-    document.getElementById('status').textContent='에러';
-  } finally { runBtn.disabled = false; }
+    st.textContent='에러';
+  }finally{ runBtn.disabled=false; }
 });
 </script>
 </body>
