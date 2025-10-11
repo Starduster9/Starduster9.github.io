@@ -470,7 +470,9 @@ function labelToColor(labels){
 async function detectAndRecognize(imgRGB, opts, progress){
   const H=imgRGB.rows, W=imgRGB.cols; const dbg=[];
   progress.start(100);
+
   const gray = await progress.step('Grayscale', 2, async ()=> toGray(imgRGB));
+
   const e_log = await progress.step('LoG edges', 6, async ()=>{
     let lap=new cv.Mat(); cv.Laplacian(gray,lap,cv.CV_16S,3,1,0,cv.BORDER_DEFAULT);
     let lapAbs=new cv.Mat(); cv.convertScaleAbs(lap,lapAbs); lap.delete();
@@ -478,29 +480,75 @@ async function detectAndRecognize(imgRGB, opts, progress){
     dbg.push(['LoG edges', bw.clone()]);
     return bw;
   });
-  const flatRefined = await progress.step('Morph + flat refine', 16, async ()=>{
+
+  const flatRefined = await progress.step('Morph + flat refine (fast)', 16, async ()=>{
     const e_close = morph(e_log,'close',3,1);
     let flat = new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
+
     const minAreaThin = (H*W/2000)|0;
-    let flat2 = removeSmallComponents(flat, minAreaThin); flat.delete();
+    let flat2 = removeThinComponents(flat, minAreaThin); flat.delete();
+
     const ksize = (Math.max(H,W)/200)|0;
-    const flatDil = fastDilateBinary(flat2, Math.max(ksize,1));
+    const flatDil = morph(flat2,'dilate',Math.max(1,ksize),1);
     let flatNei = new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
+
     const bmask75 = brightnessMask(gray,75);
-    const bmaskDil = fastDilateBinary(bmask75, Math.max(6*ksize,1));
-    let eRef = new cv.Mat(); cv.bitwise_and(flatNei, bmaskDil, eRef);
-    flatNei.delete(); bmaskDil.delete(); bmask75.delete();
-    eRef = fastOpenBinary(eRef, Math.max((ksize/2)|0,1));
-    const eRefClean = removeSmallComponents(eRef, (H * W / 20) | 0, true); eRef.delete();
-    let eRef2 = new cv.Mat(); cv.bitwise_and(eRefClean, brightnessMask(gray,75), eRef2); eRefClean.delete();
-    dbg.push(['log_refined', eRef2.clone()]);
-    return eRef2;
+    let invB = new cv.Mat(); cv.bitwise_not(bmask75, invB);
+    let flatNeiDark = new cv.Mat(); cv.bitwise_and(flatNei, invB, flatNeiDark); invB.delete();
+
+    let flat3 = new cv.Mat(); cv.bitwise_or(flat2, flatNeiDark, flat3);
+    flatNeiDark.delete(); flat2.delete();
+    const flatClean = removeThinComponents(flat3, (H*W/50)|0); flat3.delete();
+
+    let invFlat = new cv.Mat(); cv.bitwise_not(flatClean, invFlat);
+    let labels = new cv.Mat(), stats = new cv.Mat(), cents = new cv.Mat();
+    const ncc = cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
+    const areas = []; for (let i=1;i<ncc;i++) areas.push({i, area:stats.intAt(i,cv.CC_STAT_AREA)});
+    areas.sort((a,b)=>a.area-b.area);
+    const top2 = new Set(areas.slice(-2).map(o=>o.i));
+    const maskTop2 = maskFromLabelsSet(labels, top2);
+
+    let flatRefined = new cv.Mat(); cv.bitwise_not(maskTop2, flatRefined);
+    labels.delete(); stats.delete(); cents.delete(); maskTop2.delete(); invFlat.delete();
+
+    dbg.push(['flat_refined_cc', flatRefined.clone()]);
+    return flatRefined;
   });
-  const bandAndLines = await progress.step('Hough & intersections', 12, async ()=>{
-    const scale=0.5;
-    let small = new cv.Mat(); cv.resize(flatRefined, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
+
+  const bandAndLines = await progress.step('Band & Lines', 12, async ()=>{
+    const H = imgRGB.rows, W = imgRGB.cols;
+
+    const ksize = (Math.max(H, W) / 200) | 0;
+    const bmask75 = brightnessMask(gray, 75);
+
+    const flatKsize = Math.max(2 * ksize, 1);
+    const flatDil2 = fastDilateBinary(flatRefined, flatKsize);
+    let flatNei2 = new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
+    dbg.push(['flat_neighbor', flatNei2.clone()]);
+
+    const bmaskKsize = Math.max(6 * ksize, 1);
+    const bmaskDil = fastDilateBinary(bmask75, bmaskKsize);
+
+    let eRef = new cv.Mat(); cv.bitwise_and(flatNei2, bmaskDil, eRef);
+    flatNei2.delete(); bmaskDil.delete();
+
+    eRef = morph(eRef, 'open', Math.max((ksize / 2) | 0, 1), 1);
+    const eRefClean = removeSmallComponents(eRef, (H * W / 20) | 0, true); eRef.delete();
+
+    let eRef2 = new cv.Mat(); cv.bitwise_and(eRefClean, bmask75, eRef2); eRefClean.delete();
+    dbg.push(['log_refined', eRef2.clone()]);
+
+    const scale = 0.5;
+    let small = new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
+
     let linesP = new cv.Mat();
-    cv.HoughLinesP(small, linesP, 1.0, Math.PI/720, Math.max(H, W)/16|0, (Math.max(H, W)/12|0)*scale, (Math.max(H, W)/12|0)*scale);
+    cv.HoughLinesP(
+      small, linesP,
+      1.0, Math.PI/720,
+      Math.max(H, W) / 16 | 0,
+      (Math.max(H, W) / 12 | 0) * scale,
+      (Math.max(H, W) / 12 | 0) * scale
+    );
     const lines = [];
     for (let i=0;i<linesP.rows;i++){
       lines.push([
@@ -511,15 +559,19 @@ async function detectAndRecognize(imgRGB, opts, progress){
       ]);
     }
     linesP.delete(); small.delete();
+
     dbg.push(['hough', drawLinesOn(imgRGB, lines, [255,128,0], 2)]);
-    const inter = countIntersectionsByPaint(lines, opts.brush|0, opts.angleDeg|0, [H, W]);
+
+    const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W]);
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
-    return { eRef2: flatRefined, lines, lblMap: inter.labels };
+
+    return { eRef2, lines, lblMap: inter.labels };
   });
+
   const { eRef2, lines, lblMap } = bandAndLines;
 
-  const warpRes = await progress.step('Graph/Corners & Warp & Patches', 52, async ()=>{
-    // 군집 (라벨 집합 키)
+  const warpRes = await progress.step('Cluster/Graph/Corners & Warp', 52, async ()=>{
+    // 클러스터
     const clusters=(function(){
       const m = new Map();
       for(let idx=0; idx<lines.length; idx++){
@@ -538,7 +590,13 @@ async function detectAndRecognize(imgRGB, opts, progress){
       return m;
     })();
 
-    // 거리변환 → 대표 라인 선정
+    // 시각화
+    const palette=[...Array(30)].map(()=>[40+Math.random()*215|0,40+Math.random()*215|0,40+Math.random()*215|0]);
+    let imgVis=imgRGB.clone(); let ci=0;
+    for (const [,arr] of clusters.entries()){ const ls=arr.map(i=>lines[i]); imgVis=drawLinesOn(imgVis, ls, palette[ci%palette.length], 3); ci++; }
+    dbg.push(['cluster', imgVis]);
+
+    // 거리변환 → 베스트 라인
     let dist=new cv.Mat(); cv.distanceTransform(eRef2, dist, cv.DIST_L2, 3);
     dbg.push(['e_log_dist', normalizeForView(dist)]);
     const linesBest=new Map();
@@ -554,43 +612,42 @@ async function detectAndRecognize(imgRGB, opts, progress){
         linesBest.set(`${lbls[i]}-${lbls[j]}`, best);
     }
 
-    // 그래프 + 4사이클 → 코너
+    // 그래프 + 4사이클
     const G=buildLabelGraphFromLines(lines, lblMap);
     const cycles=G.cycles;
-    const corners=(function(linesBest, cycles){
-      const quads=cycles.filter(c=>c.length===4); const corners=[];
-      for (const cyc of quads){
-        const edges=[[cyc[0],cyc[1]],[cyc[1],cyc[2]],[cyc[2],cyc[3]],[cyc[3],cyc[0]]];
-        const used=[]; let ok=true;
-        for (const [u,v] of edges){ const key=(Math.min(u,v)+'-'+Math.max(u,v)); const L=linesBest.get(key); if(!L){ ok=false; break; } used.push(L); }
-        if (!ok){ corners.push([[NaN,NaN],[NaN,NaN],[NaN,NaN],[NaN,NaN]]); continue; }
-        corners.push([
-          intersectLines(used[3],used[0]),
-          intersectLines(used[0],used[1]),
-          intersectLines(used[1],used[2]),
-          intersectLines(used[2],used[3]),
-        ]);
-      }
-      return corners;
-    })(linesBest, cycles);
 
-    let bestQuad=null, bestArea=0; for (const c of corners){ const a=polygonArea(c); if (a>bestArea){bestArea=a; bestQuad=c;} }
+    // 코너
+    const C=cornersFromCycles(linesBest, cycles);
+    let bestQuad=null, bestArea=0; for (const c of C){ const a=polygonArea(c); if (a>bestArea){bestArea=a; bestQuad=c;} }
     if (!bestQuad){ dist.delete(); return { ordered:null }; }
     let ordered=orderCornersTLTRBRBL(bestQuad);
 
-    // 월드 정의
-    const borderLen = 1.0, marginAE=0.125*borderLen, marginBL=0.06*borderLen, nGrid=7;
+    // ===== recognize_formations (JS 포팅, Z=0 근사) =====
+    const sizeFull=opts.sizeFull|0, sizePatch=opts.sizePatch|0;
+
+    // 월드 정의 (Python World와 동일 값)
+    const borderLen = 1.0;
+    const marginAE  = 0.125*borderLen;
+    const marginBL  = 0.06*borderLen;
+    const nGrid     = 7;
+
+    // 경계(월드) 사각형
     const allyBorder = [[0,0],[1,0],[1,1],[0,1]];
     const enemyBorder= [[0,-marginAE-1],[1,-marginAE-1],[1,-marginAE],[0,-marginAE]];
+
+    // 내부(마진 적용) 사각형
     const allyInner  = [[marginBL,marginBL],[1-marginBL,marginBL],[1-marginBL,1-marginBL],[marginBL,1-marginBL]];
     const enemyInner = [
       [0, -marginAE-1], [1, -marginAE-1], [1, -marginAE], [0, -marginAE]
     ].map((p,idx)=>{
       const mv=[[-marginBL,-marginBL],[ marginBL,-marginBL],[ marginBL, marginBL],[-marginBL, marginBL]][idx];
-      return [p[0]-mv[0], p[1]-mv[1]];
+      return [p[0]-mv[0], p[1]-mv[1]]; // (원 코드: border - margin_vec)
     });
-    const formLen = 1 - 2*marginBL, cell = formLen / nGrid;
 
+    const formLen = 1 - 2*marginBL;
+    const cell    = formLen / nGrid;
+
+    // 퍼스펙티브 변환/프로젝션 유틸
     function getPerspectiveTransformFromPts(srcPts, dstPts){
       const src=cv.matFromArray(4,1,cv.CV_32FC2, srcPts.flat());
       const dst=cv.matFromArray(4,1,cv.CV_32FC2, dstPts.flat());
@@ -606,16 +663,30 @@ async function detectAndRecognize(imgRGB, opts, progress){
       const H=getPerspectiveTransformFromPts(srcPts,dstPts); let warped=new cv.Mat();
       cv.warpPerspective(img,warped,H,new cv.Size(size,size),cv.INTER_LINEAR,cv.BORDER_REPLICATE); H.delete(); return warped;
     }
-    function gridQuadAlly(i,j){ const x0 = allyInner[0][0] + j*cell; const y0 = allyInner[0][1] + i*cell; return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]]; }
-    function gridQuadEnemy(i,j){ const x0 = enemyInner[2][0] - (j+1)*cell; const y0 = enemyInner[2][1] - (i+1)*cell; return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]]; }
 
-    const sizeFull=opts.sizeFull|0, sizePatch=opts.sizePatch|0;
-    const H0=getPerspectiveTransformFromPts( allyBorder, ordered );
+    // H0: (월드 allyBorder → 이미지 사각형 ordered)
+    const H0=getPerspectiveTransformFromPts(allyBorder, ordered);
+
+    // Ally/Enemy 전체 워프
     const allyInImg  = projectQuad(H0, allyBorder);
     const enemyInImg = projectQuad(H0, enemyBorder);
     const allyWarp   = warpByPts(imgRGB, allyInImg, sizeFull);
     const enemyWarp  = warpByPts(imgRGB, enemyInImg, sizeFull);
 
+    // 셀 사각형 생성기 (월드 좌표 → 이미지 워프)
+    function gridQuadAlly(i,j){
+      const x0 = allyInner[0][0] + j*cell;
+      const y0 = allyInner[0][1] + i*cell;
+      return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]];
+    }
+    function gridQuadEnemy(i,j){
+      // 원 코드와 동일한 방향(오른→왼, 아래→위) 기준: inner[2]는 br
+      const x0 = enemyInner[2][0] - (j+1)*cell;
+      const y0 = enemyInner[2][1] - (i+1)*cell;
+      return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]];
+    }
+
+    // Troops (7x7)
     const troopsAlly={}, troopsEnemy={};
     for (let i=0;i<nGrid;i++){
       for (let j=0;j<nGrid;j++){
@@ -623,23 +694,33 @@ async function detectAndRecognize(imgRGB, opts, progress){
         const qe = projectQuad(H0, gridQuadEnemy(i,j));
         const wa = warpByPts(imgRGB, qa, sizePatch);
         const we = warpByPts(imgRGB, qe, sizePatch);
-        troopsAlly[`${i}${j}`]=wa; troopsEnemy[`${i}${j}`]=we;
+        troopsAlly[`${i}${j}`]=wa;
+        troopsEnemy[`${i}${j}`]=we;
       }
     }
 
-    // 히어로 (그대로 추출만 – 분류는 안 함)
+    // Heroes (3개) – Python 위치와 동일한 i,j 사용 (float 포함)
     const heroesAlly={}, heroesEnemy={};
     const hjAlly = [[0, [7, 3]], [1, [3, -1]], [2, [3, 7]]];
     const hjEnemy= [[0, [7, 3]], [1, [3.5, -1]], [2, [3.5, 7]]];
-    for (const [k, ij] of hjAlly){ const [ii,jj]=ij; const qa = projectQuad(H0, gridQuadAlly(ii, jj)); heroesAlly[String(k)] = warpByPts(imgRGB, qa, sizePatch); }
-    for (const [k, ij] of hjEnemy){ const [ii,jj]=ij; const qe = projectQuad(H0, gridQuadEnemy(ii, jj)); heroesEnemy[String(k)] = warpByPts(imgRGB, qe, sizePatch); }
+
+    for (const [k, ij] of hjAlly){
+      const [ii,jj]=ij;
+      const qa = projectQuad(H0, gridQuadAlly(ii, jj));
+      heroesAlly[String(k)] = warpByPts(imgRGB, qa, sizePatch);
+    }
+    for (const [k, ij] of hjEnemy){
+      const [ii,jj]=ij;
+      const qe = projectQuad(H0, gridQuadEnemy(ii, jj));
+      heroesEnemy[String(k)] = warpByPts(imgRGB, qe, sizePatch);
+    }
 
     H0.delete(); dist.delete();
     return { ordered, allyWarp, enemyWarp, troopsAlly, troopsEnemy, heroesAlly, heroesEnemy };
   });
 
-  // Clean
-  e_log.delete(); flatRefined.delete(); bandAndLines.lblMap.delete();
+  // 리소스 정리
+  e_log.delete(); flatRefined.delete(); bandAndLines.eRef2.delete(); bandAndLines.lblMap.delete();
 
   return {
     corners: warpRes.ordered,
