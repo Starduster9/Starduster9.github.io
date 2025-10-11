@@ -270,7 +270,7 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
       const X = x1 + t*(x2-x1); const Y = y1 + t*(y2-y1);
       const cx = Math.round(X), cy=Math.round(Y);
       const axes = new cv.Size( (brushSize*2)|0, brushSize|0 );
-      cv.ellipse($1, new cv.Point(cx,cy), axes, 0, 0, 360, new cv.Scalar(255,255,255,255), -1);
+      cv.ellipse(mask, new cv.Point(cx,cy), axes, 0, 0, 360, new cv.Scalar(255,255,255,255), -1);
     }
   }
   let labels = new cv.Mat(); let stats = new cv.Mat(); let cents = new cv.Mat();
