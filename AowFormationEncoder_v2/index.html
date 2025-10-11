@@ -517,7 +517,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const e_close=morph(e_log,'close',3,1);
     let flat=new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
     const minAreaThin=(H*W/2000)|0; let flat2=removeThinComponents(flat, minAreaThin); flat.delete();
-    const ksize=(Math.max(H,W)/300)|0; // 약하게(연산량↓)
+    const ksize=(Math.max(H,W)/200)|0; // 약하게(연산량↓)
     const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1);
     let flatNei=new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
     const bmask75=brightnessMask(gray,75);
