@@ -341,66 +341,66 @@ function fastDilateBinary(mask, radiusPx){
   return u8; // CV_8U {0,255}
 }
 
-/* ======== 교차 라벨 생성 (버킷팅 + circle 로 가속) ======== */
+/* ======== 교차 라벨 생성 ======== */
 function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
-  const [H,W]=imgShape; const eps=1e-9;
-  // 1) 메타/버킷
-  const binSize = 10 * Math.PI/180; // 각도 10°
-  const cell = 64;                   // 공간 버킷 크기
-  const angleThr = angleDeg * Math.PI/180;
+  const [H, W] = imgShape;
+  const N = lines.length | 0;
+  const eps = 1e-9;
+  const angleThr = (angleDeg * Math.PI/180) || (30 * Math.PI/180);
+  const r = Math.max(1, brushSize | 0);
 
-  function cellKey(x,y){ return ((x/cell)|0)+','+((y/cell)|0); }
-  const meta = [];
-  const grid = new Map();
-
-  for (let i=0;i<lines.length;i++){
-    const [x1,y1,x2,y2]=lines[i];
-    const ang=Math.atan2(y2-y1, x2-x1);
-    const mx=0.5*(x1+x2), my=0.5*(y1+y2);
-    const rec={i, p:lines[i], ang, abin:((ang+Math.PI)/binSize)|0, mid:[mx,my]};
-    meta.push(rec);
-    const k=cellKey(mx,my);
-    if(!grid.has(k)) grid.set(k,[]);
-    grid.get(k).push(rec);
-  }
-  const nbh = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
-
-  // 2) 캔버스에 점 찍기
-  const mask=new cv.Mat.zeros(H,W,cv.CV_8U);
+  // 빠른 접근용 헬퍼
+  function ang(l){ return Math.atan2(l[3]-l[1], l[2]-l[0]); }
   function intersect(l1,l2){
     const [x1,y1,x2,y2]=l1, [x3,y3,x4,y4]=l2;
     const den=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);
-    if(Math.abs(den)<eps) return null;
+    if (Math.abs(den) < eps) return null;
     const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/den;
-    return [x1+t*(x2-x1), y1+t*(y2-y1)];
+    return [x1 + t*(x2-x1), y1 + t*(y2-y1)];
   }
-  for (const [k, arr] of grid.entries()){
-    const [cx,cy]=k.split(',').map(Number);
-    arr.sort((a,b)=>a.ang-b.ang);
-    for (const [dx,dy] of nbh){
-      const kk=(cx+dx)+','+(cy+dy);
-      const arr2=grid.get(kk); if(!arr2) continue;
-      for (let a=0;a<arr.length;a++){
-        const r1=arr[a];
-        for (let b=0;b<arr2.length;b++){
-          const r2=arr2[b];
-          if (r2.i<=r1.i) continue;
-          let dAng = Math.abs(r1.ang - r2.ang);
-          if (dAng > Math.PI) dAng = 2*Math.PI - dAng;
-          if (dAng + 1e-9 < angleThr) continue;
-          const P=intersect(r1.p, r2.p); if(!P) continue;
-          const x=P[0]|0, y=P[1]|0;
-          if (x<0||x>=W||y<0||y>=H) continue;
-          cv.circle(mask, new cv.Point(x,y), Math.max(1, brushSize|0), new cv.Scalar(255,255,255,255), -1);
-        }
-      }
+
+  // 마스크 준비
+  const mask = new cv.Mat.zeros(H, W, cv.CV_8U);
+
+  // 각도 미리 계산 (조금이라도 절약)
+  const angles = new Array(N);
+  for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
+
+  let pairsTried = 0, dotsPainted = 0;
+
+  for (let i=0;i<N;i++){
+    const ai = angles[i];
+    const li = lines[i];
+    for (let j=i+1;j<N;j++){
+      // 각도 필터
+      let d = Math.abs(ai - angles[j]);
+      if (d > Math.PI) d = 2*Math.PI - d;
+      if (d + 1e-9 < angleThr) continue;
+
+      const P = intersect(li, lines[j]);
+      if (!P) continue;
+      const x = P[0] | 0, y = P[1] | 0;
+      if (x<0 || x>=W || y<0 || y>=H) { pairsTried++; continue; }
+
+      // ellipse 대신 circle (더 빠름)
+      cv.circle(mask, new cv.Point(x,y), r, new cv.Scalar(255,255,255,255), -1);
+      dotsPainted++; pairsTried++;
     }
   }
-  // 3) 라벨 개수/맵
+
+  // 라벨링
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
-  const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
+  const n = cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
   mask.delete(); stats.delete(); cents.delete();
-  return {count:Math.max(n-1,0), labels};
+
+  // (선택) 진행 로그 찍기
+  if (typeof progress!=='undefined' && progress && typeof progress._log==='function'){
+    progress._log(`    • pairwise tried: ${pairsTried}`);
+    progress._log(`    • painted dots: ${dotsPainted}`);
+    progress._log(`    • components: ${Math.max(n-1,0)}`);
+  }
+
+  return { count: Math.max(n-1,0), labels };
 }
 
 /* ===== 간단 그래프 + 4사이클 ===== */
