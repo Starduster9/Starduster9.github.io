@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Formation Detector – OpenCV.js + Progress (fixed)</title>
+<title>Formation Detector – OpenCV.js (fast + progress)</title>
 <style>
 :root{--bg:#0b0d10;--card:#12161b;--ink:#e6edf3;--muted:#9aa7b5;--accent:#5b9cff;--ok:#28a745;--err:#ff5d5d}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Apple SD Gothic Neo,Malgun Gothic,sans-serif}
@@ -46,9 +46,7 @@ footer{padding:10px 16px;color:var(--muted);border-top:1px solid #1e242c}
   function callReadyOnce(){ if(!readyCalled){ readyCalled=true; if(typeof onCvReady==='function') onCvReady(); } }
   window.onOpenCvLoaded=function(){
     if (typeof cv !== 'undefined'){
-      // 보통은 여기서 등록
       cv['onRuntimeInitialized'] = function(){ callReadyOnce(); };
-      // 혹시 이미 초기화가 끝난 경우 대비: 폴링 (최대 10초)
       let t0=performance.now();
       pollId = setInterval(()=>{
         try{
@@ -194,13 +192,15 @@ let srcMat=null;
 function onCvReady(){
   cvReady=true;
   const runEl=document.getElementById('run');
-  if (runEl) runEl.disabled=false;   // ← 초기화 완료 시 실행 버튼 활성화
+  if (runEl) runEl.disabled=false;
   const st=document.getElementById('status');
   if (st) st.textContent='준비 완료';
 }
 
 function matFromImage(img){ const m=cv.imread(img); let rgb=new cv.Mat(); cv.cvtColor(m,rgb,cv.COLOR_RGBA2RGB); m.delete(); return rgb; }
 function toGray(mat){ if (mat.type()===cv.CV_8UC1) return mat.clone(); let g=new cv.Mat(); cv.cvtColor(mat,g,cv.COLOR_RGB2GRAY); return g; }
+
+/* ===== 빠른 히스토그램 분위수 ===== */
 function percentileGray(mat, perc){
   const images=new cv.MatVector(); images.push_back(mat);
   const channels=[0], mask=new cv.Mat(), hist=new cv.Mat(), histSize=[256], ranges=[0,256];
@@ -209,6 +209,8 @@ function percentileGray(mat, perc){
   let cum=0, thr=255; for (let i=0;i<256;i++){ cum+=hist.floatAt(i,0); if (cum>=target){thr=i;break;} }
   images.delete(); mask.delete(); hist.delete(); return thr|0;
 }
+
+/* ===== 모폴로지 ===== */
 function morph(mat, op, kSize=3, iters=1){
   const kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE,new cv.Size(kSize,kSize));
   let out=new cv.Mat();
@@ -219,63 +221,78 @@ function morph(mat, op, kSize=3, iters=1){
   kernel.delete(); return out;
 }
 function brightnessMask(gray, perc){ const thr=percentileGray(gray, perc); let m=new cv.Mat(); cv.threshold(gray,m,thr,255,cv.THRESH_BINARY); return m; }
+
+/* ===== 라벨 기반 마스크 재구성(고속, 단일 패스) ===== */
+function maskFromLabelsSet(labels, keepSet){
+  const rows=labels.rows, cols=labels.cols, N=rows*cols;
+  const L = labels.data32S; // Int32Array
+  let out = new cv.Mat.zeros(rows, cols, cv.CV_8U);
+  const M = out.data; // Uint8Array
+  for (let i=0;i<N;i++){
+    const v = L[i];
+    if (v>=1 && keepSet.has(v)) M[i]=255;
+  }
+  return out;
+}
+
+/* ===== 작은/얇은 성분 제거 (JS 이중루프 제거) ===== */
 function removeSmallComponents(mask, minArea=100, area_w_wh=false){
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
   const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
-  let cleaned=new cv.Mat.zeros(mask.rows,mask.cols,cv.CV_8U);
+  const keep=new Set();
   for (let i=1;i<n;i++){
     const area=stats.intAt(i,cv.CC_STAT_AREA);
     const w=stats.intAt(i,cv.CC_STAT_WIDTH), h=stats.intAt(i,cv.CC_STAT_HEIGHT);
-    const keep=area_w_wh ? (w*h>=minArea) : (area>=minArea);
-    if (keep){
-      for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++)
-        if (labels.intAt(r,c)===i) cleaned.ucharPtr(r,c)[0]=255;
-    }
+    if ((area_w_wh ? (w*h>=minArea) : (area>=minArea))) keep.add(i);
   }
-  labels.delete(); stats.delete(); cents.delete(); return cleaned;
+  const cleaned = maskFromLabelsSet(labels, keep);
+  labels.delete(); stats.delete(); cents.delete();
+  return cleaned;
 }
 function removeThinComponents(mask, minArea=100){
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
   const n=cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
-  let cleaned=new cv.Mat.zeros(mask.rows,mask.cols,cv.CV_8U);
+  const keep=new Set();
   for (let i=1;i<n;i++){
     const area=stats.intAt(i,cv.CC_STAT_AREA);
     const w=stats.intAt(i,cv.CC_STAT_WIDTH), h=stats.intAt(i,cv.CC_STAT_HEIGHT);
-    if (area>=minArea && area>0.1*w*h){
-      for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++)
-        if (labels.intAt(r,c)===i) cleaned.ucharPtr(r,c)[0]=255;
-    }
+    if (area>=minArea && area>0.1*w*h) keep.add(i);
   }
-  labels.delete(); stats.delete(); cents.delete(); return cleaned;
+  const cleaned = maskFromLabelsSet(labels, keep);
+  labels.delete(); stats.delete(); cents.delete();
+  return cleaned;
 }
-function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
-  const c=new cv.Scalar(
-    Array.isArray(color)? (color[0] ?? 255) : 255,
-    Array.isArray(color)? (color[1] ?? 255) : 255,
-    Array.isArray(color)? (color[2] ?? 255) : 255,
-    255
-  );
-  let out=mat.clone();
-  for (const l of lines){ const [x1,y1,x2,y2]=l; cv.line(out,new cv.Point(x1,y1),new cv.Point(x2,y2),c,thickness,cv.LINE_AA); }
-  return out;
-}
-function canvasFromMat(mat, canvas){ cv.imshow(canvas, mat); }
-function makeDbgSlot(title){ const wrap=document.createElement('div'); wrap.className='slot'; const h3=document.createElement('h3'); h3.textContent=title; wrap.appendChild(h3); const c=document.createElement('canvas'); wrap.appendChild(c); return {wrap,canvas:c}; }
 
-/* 고속 선 샘플링: LineIterator 기반 */
+/* ===== 선 샘플링 (LineIterator 없이, DDA + TypedArray) ===== */
 function sampleLineVals(mat, line){
-  const [x1,y1,x2,y2]=line.map(v=>Math.round(v));
-  const dx=x2-x1, dy=y2-y1, length=Math.max(1,Math.round(Math.hypot(dx,dy))+1);
-  const xs=[], ys=[], vals=[]; const type=mat.type(); const is32F=(type===cv.CV_32F), is32S=(type===cv.CV_32S);
-  for(let k=0;k<length;k++){
-    const x=Math.round(x1+dx*(k/(length-1))); const y=Math.round(y1+dy*(k/(length-1)));
-    if (x>=0 && x<mat.cols && y>=0 && y<mat.rows){
-      xs.push(x); ys.push(y);
-      vals.push(is32F? mat.floatAt(y,x) : is32S? mat.intAt(y,x) : mat.ucharAt(y,x));
+  let [x1,y1,x2,y2]=line.map(v=>Math.round(v));
+  const cols=mat.cols, rows=mat.rows;
+  const type=mat.type();
+  const data8  = (type===cv.CV_8U ) ? mat.data   : null;
+  const data32F= (type===cv.CV_32F) ? mat.data32F: null;
+  const data32S= (type===cv.CV_32S) ? mat.data32S: null;
+  const dx = x2 - x1, dy = y2 - y1;
+  const steps = Math.max(Math.abs(dx), Math.abs(dy)) || 1;
+  const sx = dx / steps, sy = dy / steps;
+  let x = x1, y = y1;
+  const vals = [];
+  for (let i=0;i<=steps;i++){
+    const xi = x|0, yi = y|0;
+    if (xi>=0 && xi<cols && yi>=0 && yi<rows){
+      const idx = yi*cols + xi;
+      let v=0;
+      if (data8)   v = data8[idx];
+      else if (data32F) v = data32F[idx];
+      else if (data32S) v = data32S[idx];
+      else v = mat.ucharAt(yi,xi);
+      vals.push(v);
     }
+    x += sx; y += sy;
   }
-  return {vals,xs,ys};
+  return { vals };
 }
+
+/* ===== 교차 라벨 생성 ===== */
 function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const [H,W]=imgShape; let mask=new cv.Mat.zeros(H,W,cv.CV_8U); const eps=1e-9;
   const unit=(vx,vy)=>{const n=Math.hypot(vx,vy);return n<eps?[0,0]:[vx/n,vy/n];};
@@ -298,7 +315,7 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   return {count:Math.max(n-1,0), labels};
 }
 
-/* 간단 그래프 + 4사이클 */
+/* ===== 간단 그래프 + 4사이클 ===== */
 (function(){
   function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
   class MiniGraph{
@@ -373,7 +390,6 @@ function polygonArea(pts){
   let s=0; for (let i=0;i<pts.length;i++){ const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length]; s+=x1*y2 - y1*x2; }
   return Math.abs(0.5*s);
 }
-/* 좌표계(y 아래로 증가) 고려한 코너 정렬 */
 function orderCornersTLTRBRBL(pts){
   const arr = pts.map(p => ({ p, s: p[0] + p[1], d: p[0] - p[1] }));
   const tl = arr.reduce((a,b) => a.s < b.s ? a : b).p;
@@ -394,18 +410,14 @@ function labelToColor(labels){
   return out;
 }
 
-/* ============== 파이프라인 (with progress) ============== */
+/* ============== 파이프라인 (with progress + speedups) ============== */
 async function detectAndRecognize(imgRGB, opts, progress){
   const H=imgRGB.rows, W=imgRGB.cols; const dbg=[];
-  const angleDeg=opts.angleDeg|0, brush=opts.brush|0;
-
   progress.start(100);
 
-  const gray = await progress.step('Grayscale', 2, async ()=>{
-    return toGray(imgRGB);
-  });
+  const gray = await progress.step('Grayscale', 2, async ()=> toGray(imgRGB));
 
-  const e_log = await progress.step('LoG edges', 8, async ()=>{
+  const e_log = await progress.step('LoG edges', 6, async ()=>{
     let lap=new cv.Mat(); cv.Laplacian(gray,lap,cv.CV_16S,3,1,0,cv.BORDER_DEFAULT);
     let lapAbs=new cv.Mat(); cv.convertScaleAbs(lap,lapAbs); lap.delete();
     let thr=percentileGray(lapAbs,75); let bw=new cv.Mat(); cv.threshold(lapAbs,bw,thr,255,cv.THRESH_BINARY); lapAbs.delete();
@@ -413,37 +425,33 @@ async function detectAndRecognize(imgRGB, opts, progress){
     return bw;
   });
 
-  const flatRefined = await progress.step('Morph + flat refine', 16, async ()=>{
+  const flatRefined = await progress.step('Morph + flat refine (fast)', 16, async ()=>{
     const e_close=morph(e_log,'close',3,1);
     let flat=new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
     const minAreaThin=(H*W/2000)|0; let flat2=removeThinComponents(flat, minAreaThin); flat.delete();
-    const ksize=(Math.max(H,W)/200)|0; const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1);
+    const ksize=(Math.max(H,W)/300)|0; // 약하게(연산량↓)
+    const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1);
     let flatNei=new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
     const bmask75=brightnessMask(gray,75);
     let invB=new cv.Mat(); cv.bitwise_not(bmask75, invB); let flatNeiDark=new cv.Mat(); cv.bitwise_and(flatNei, invB, flatNeiDark); invB.delete();
     let flat3=new cv.Mat(); cv.bitwise_or(flat2, flatNeiDark, flat3); flatNeiDark.delete(); flat2.delete();
     const flatClean=removeThinComponents(flat3, (H*W/50)|0); flat3.delete();
 
-    // top2만 유지
+    // top2 라벨만 유지(단일 패스)
     let invFlat=new cv.Mat(); cv.bitwise_not(flatClean, invFlat);
     let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
     const ncc=cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
     const areas=[]; for (let i=1;i<ncc;i++) areas.push({i, area:stats.intAt(i,cv.CC_STAT_AREA)});
-    areas.sort((a,b)=>a.area-b.area); const top2=areas.slice(-2).map(o=>o.i);
-    let maskTop2=new cv.Mat.zeros(H,W,cv.CV_8U);
-    for (let r=0;r<labels.rows;r++) for (let c=0;c<labels.cols;c++) { // ★ FIX: 오타 수정
-      const v=labels.intAt(r,c);
-      if (top2.includes(v)) maskTop2.ucharPtr(r,c)[0]=255;
-    }
+    areas.sort((a,b)=>a.area-b.area); const top2=new Set(areas.slice(-2).map(o=>o.i));
+    const maskTop2 = maskFromLabelsSet(labels, top2);
     let flatRefined=new cv.Mat(); cv.bitwise_not(maskTop2, flatRefined);
     labels.delete(); stats.delete(); cents.delete(); maskTop2.delete(); invFlat.delete();
-
+    dbg.push(['flat_refined_cc', flatRefined.clone()]);
     return flatRefined;
   });
 
-  const { eRef2, lines, lblMap } = await progress.step('Band & HoughLinesP', 18, async ()=>{
-    const H=imgRGB.rows, W=imgRGB.cols;
-    const ksize=(Math.max(H,W)/200)|0;
+  const bandAndLines = await progress.step('Band & HoughLinesP (downscaled)', 12, async ()=>{
+    const ksize=(Math.max(H,W)/300)|0;
     const bmask75=brightnessMask(gray,75);
     const flatDil2=morph(flatRefined,'dilate',Math.max(2*ksize,1),1);
     let flatNei2=new cv.Mat(); cv.bitwise_xor(flatDil2, flatRefined, flatNei2); flatDil2.delete();
@@ -455,21 +463,35 @@ async function detectAndRecognize(imgRGB, opts, progress){
     let eRef2=new cv.Mat(); cv.bitwise_and(eRefClean, bmask75, eRef2); eRefClean.delete();
     dbg.push(['log_refined', eRef2.clone()]);
 
-    // Hough
+    // 다운스케일 Hough
+    const scale=0.5; // 0.5~0.75 권장
+    let small=new cv.Mat(); cv.resize(eRef2, small, new cv.Size(0,0), scale, scale, cv.INTER_NEAREST);
     let linesP=new cv.Mat();
-    cv.HoughLinesP(eRef2, linesP, 1.0, Math.PI/720, Math.max(H,W)/8|0, Math.max(H,W)/6|0, Math.max(H,W)/6|0);
-    const lines=[]; for(let i=0;i<linesP.rows;i++){ lines.push([linesP.intAt(i,0),linesP.intAt(i,1),linesP.intAt(i,2),linesP.intAt(i,3)]); }
-    linesP.delete();
+    cv.HoughLinesP(
+      small, linesP,
+      1.0, Math.PI/720,
+      Math.max(H,W)/16|0,                 // 완화
+      (Math.max(H,W)/12|0)*scale,
+      (Math.max(H,W)/12|0)*scale
+    );
+    const lines=[]; for(let i=0;i<linesP.rows;i++){
+      const x1=linesP.intAt(i,0)/scale, y1=linesP.intAt(i,1)/scale;
+      const x2=linesP.intAt(i,2)/scale, y2=linesP.intAt(i,3)/scale;
+      lines.push([x1|0,y1|0,x2|0,y2|0]);
+    }
+    linesP.delete(); small.delete();
     dbg.push(['hough', drawLinesOn(imgRGB, lines, [255,128,0], 2)]);
 
     // 교차 라벨
     const inter = countIntersectionsByPaint(lines, opts.brush|0, opts.angleDeg|0, [H,W]);
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
-
     return { eRef2, lines, lblMap: inter.labels };
   });
 
-  const { ordered, allyWarp, enemyWarp } = await progress.step('Cluster/Graph/Corners & Warp', 40, async ()=>{
+  const { eRef2, lines, lblMap } = bandAndLines;
+
+  const warpRes = await progress.step('Cluster/Graph/Corners & Warp', 52, async ()=>{
+    // 클러스터
     const clusters=(function(){
       const m = new Map();
       for(let idx=0; idx<lines.length; idx++){
@@ -510,7 +532,7 @@ async function detectAndRecognize(imgRGB, opts, progress){
         linesBest.set(`${lbls[i]}-${lbls[j]}`, best);
     }
 
-    // 그래프 + 4사이클 (lblMap 사용!)
+    // 그래프 + 4사이클
     const G=buildLabelGraphFromLines(lines, lblMap);
     const cycles=cycleBasis4(G);
 
@@ -555,9 +577,9 @@ async function detectAndRecognize(imgRGB, opts, progress){
   });
 
   // 리소스 정리
-  e_log.delete(); flatRefined.delete(); eRef2.delete(); lblMap.delete();
+  e_log.delete(); flatRefined.delete(); bandAndLines.eRef2.delete(); bandAndLines.lblMap.delete();
 
-  return { corners: ordered, ally: allyWarp, enemy: enemyWarp, dbg };
+  return { corners: warpRes.ordered, ally: warpRes.allyWarp, enemy: warpRes.enemyWarp, dbg };
 }
 
 /* ============== UI ============== */
@@ -567,11 +589,10 @@ fileInput.addEventListener('change', e=>{
   const img=new Image();
   img.onload=()=>{
     if (srcMat) srcMat.delete();
-    srcMat=matFromImage(img);  // ← OpenCV로 Mat 생성
+    srcMat=matFromImage(img);
     const c=document.getElementById('cOrig');
     c.width=srcMat.cols; c.height=srcMat.rows;
-    canvasFromMat(srcMat,c);   // ← 미리보기 표시
-    // 만약 cvReady 콜백 타이밍이 늦어도, 여기서 한 번 더 보정
+    canvasFromMat(srcMat,c);
     const runBtn=document.getElementById('run');
     if (cv && cv.Mat) runBtn.disabled=false;
   };
@@ -596,7 +617,6 @@ document.getElementById('run').addEventListener('click', async ()=>{
 
     const res=await detectAndRecognize(srcMat, opts, progress);
 
-    // ===== 디버그 렌더 순서: cluster 먼저 → 나머지 → cluster delete =====
     const grid=document.getElementById('dbgGrid'); grid.innerHTML='';
     const idxCluster = res.dbg.findIndex(d => d[0] === 'cluster');
     if (idxCluster >= 0) {
