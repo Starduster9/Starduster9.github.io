@@ -669,8 +669,10 @@ async function detectAndRecognize(imgRGB, opts, progress){
   
     t = performance.now();
     const inter = countIntersectionsByPaint(lines, opts.brush | 0, opts.angleDeg | 0, [H, W], progress);
+    log('countIntersectionsByPaint', t);
+    t = performance.now();
     dbg.push(['intersection_map', labelToColor(inter.labels)]);
-    log('countIntersectionsByPaint + dbg(labelToColor)', t);
+    log('dbg(labelToColor)', t);
   
     progress._log(`  Σ Band & Lines total: ${(performance.now() - t0).toFixed(1)} ms`);
     return { eRef2, lines, lblMap: inter.labels };
