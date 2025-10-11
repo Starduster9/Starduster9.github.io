@@ -952,14 +952,7 @@ async function inferTroopsFromMats(patchMats) {
 
         // 썸네일 표시
         if (thumb) {
-          const max = 240;
-          const scale = Math.min(max / img.width, max / img.height, 1);
-          const w = Math.max(1, Math.round(img.width * scale));
-          const h = Math.max(1, Math.round(img.height * scale));
-          const cvs = document.createElement('canvas');
-          cvs.width = w; cvs.height = h;
-          cvs.getContext('2d').drawImage(img, 0, 0, w, h);
-          thumb.src = cvs.toDataURL('image/png');
+          thumb.src = URL.createObjectURL(f);
           thumb.hidden = false;
           thumb.style.display = 'block';
         }
