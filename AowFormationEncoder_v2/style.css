@@ -1,0 +1,163 @@
+:root{
+  /* 밝고 깔끔한 라이트 팔레트 */
+  --bg:#f7f9fc;            /* 페이지 배경 */
+  --card:#ffffff;          /* 카드/패널 */
+  --line:#e6eaf2;          /* 경계선 */
+  --text:#0f172a;          /* 기본 텍스트(짙은 남색 톤) */
+  --muted:#5b6b8c;         /* 보조 텍스트 */
+  --accent:#3b82f6;        /* 핵심 포인트 블루 */
+
+  --ok:#16a34a;            /* 성공 */
+  --warn:#d97706;          /* 경고 */
+  --err:#dc2626;           /* 오류 */
+  --focus:#93c5fd;         /* 포커스 링 */
+
+  --radius:16px;
+  --space:16px;
+  --space-lg:22px;
+  --shadow:0 10px 30px rgba(15, 23, 42, .08);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, Helvetica, Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* 헤더: 밝은 그라디언트 + 얇은 경계 */
+header{
+  position:sticky; top:0; z-index:10;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.75));
+  border-bottom:1px solid var(--line);
+  padding:18px var(--space);
+}
+.title{display:flex; gap:12px; align-items:center;}
+.title h1{margin:0; font-size: clamp(20px, 3.8vw, 32px); letter-spacing:.2px}
+.subtitle{margin-top:6px; color:var(--muted); font-size: clamp(14px, 2.4vw, 18px)}
+
+/* 레이아웃 */
+main{
+  max-width:880px; margin:0 auto;
+  padding:var(--space-lg);
+  display:flex; flex-direction:column; gap:var(--space-lg)
+}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:var(--space-lg)
+}
+
+label, .step-title{font-weight:700; font-size:20px}
+.hint{color:var(--muted); font-size:16px; margin-top:6px}
+.row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+.actions{display:flex; gap:12px; flex-wrap:wrap; margin-top:12px}
+
+/* 버튼: 라이트 톤 */
+button{
+  appearance:none;
+  border:1px solid var(--line);
+  background:#ffffff;
+  color:var(--text);
+  padding:14px 18px;
+  border-radius:14px;
+  cursor:pointer;
+  font-size:18px; line-height:1;
+  transition: box-shadow .15s ease, transform .04s ease, border-color .15s ease;
+}
+button:hover{box-shadow:0 6px 18px rgba(59,130,246,.15)}
+button:active{transform:translateY(1px)}
+button.primary{
+  background: linear-gradient(180deg, #60a5fa, var(--accent));
+  color:#ffffff;
+  border-color: transparent;
+  box-shadow:0 12px 28px rgba(59,130,246,.25);
+}
+button.ghost{
+  background:#f3f6fd;
+  border-color:#dbe2f1;
+  color:#1f2a44;
+}
+button:disabled{opacity:.55; cursor:not-allowed}
+button:focus-visible{outline:4px solid var(--focus)}
+
+/* 입력 요소: 밝은 배경 */
+input[type="file"]{
+  width:100%;
+  padding:18px;
+  border:2px dashed #cdd6ea;
+  background:#f9fbff;
+  border-radius:14px;
+  color:#1f2a44;
+  font-size:18px
+}
+
+textarea{
+  width:100%; min-height:180px; resize:vertical;
+  border-radius:14px;
+  background:#fbfdff;
+  border:2px solid #dbe2f1;
+  color:#0f172a;
+  padding:14px; font-size:16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace
+}
+
+.grid{display:grid; grid-template-columns: 1fr; gap:12px}
+
+/* 알약형 배지: 라이트 */
+.pill{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 12px;
+  border:1px solid #dbe2f1;
+  border-radius:999px; font-size:16px;
+  background:#f4f7ff; color:#273755
+}
+
+/* 미리보기/썸네일 */
+.preview-wrap{display:grid; grid-template-columns: 1fr; gap:12px}
+canvas, .thumb{
+  width:100%;
+  border-radius:14px;
+  border:2px solid #dbe2f1;
+  background:#fbfdff
+}
+.thumb{height:240px; object-fit:contain; display:none}
+
+/* 상태 텍스트 색 */
+.status{font-size:18px; margin-top:6px}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.status.err{color:var(--err)}
+
+.sr-only{
+  position:absolute !important; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0
+}
+
+.copy-row{display:flex; gap:8px; flex-wrap:wrap}
+.copy-row button{font-size:16px; padding:10px 14px}
+
+details{margin-top:10px}
+summary{cursor:pointer; color:#1d4ed8}
+
+/* 부드러운 등장 */
+@media (prefers-reduced-motion: no-preference){
+  .fade-in{animation:fade .25s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(2px)} to{opacity:1; transform:none}}
+}
+
+/* 다크 모드 보정(선택 사항) */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f172a; --card:#111827; --line:#1f2a44; --text:#eef2ff; --muted:#93a4c7; --accent:#60a5fa;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  input[type="file"]{background:#0f1a33; border-color:#2b3a6a; color:#dbe3ff}
+  textarea{background:#0b1330; border-color:#2b3a6a; color:#e9eeff}
+  button.ghost{background:#151b2e; color:#e6ecff; border-color:#233055}
+  summary{color:#93c5fd}
+}
