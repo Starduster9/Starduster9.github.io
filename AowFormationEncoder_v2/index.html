@@ -392,52 +392,59 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
   const N = lines.length | 0;
   const eps = 1e-9;
   const angleThr = (angleDeg * Math.PI/180) || (30 * Math.PI/180);
+  const rBase = Math.max(1, brushSize | 0);
 
-  const ang = l => Math.atan2(l[3]-l[1], l[2]-l[0]);
-  const angles = new Array(N);
-  for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
-
-  const pts = [];
-  const intersect = (l1,l2)=>{
+  function ang(l){ return Math.atan2(l[3]-l[1], l[2]-l[0]); }
+  function intersect(l1,l2){
     const [x1,y1,x2,y2]=l1, [x3,y3,x4,y4]=l2;
     const den=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);
     if (Math.abs(den) < eps) return null;
     const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/den;
     return [x1 + t*(x2-x1), y1 + t*(y2-y1)];
-  };
+  }
+  const clamp = (v, lo, hi) => (v < lo ? lo : (v > hi ? hi : v));
+
+  const mask = new cv.Mat.zeros(H, W, cv.CV_8U);
+  const angles = new Array(N);
+  for (let i=0;i<N;i++) angles[i] = ang(lines[i]);
+
+  let pairsTried = 0, dotsPainted = 0;
+
   for (let i=0;i<N;i++){
     const ai = angles[i], li = lines[i];
     for (let j=i+1;j<N;j++){
       let d = Math.abs(ai - angles[j]); if (d > Math.PI) d = 2*Math.PI - d;
       if (d + 1e-9 < angleThr) continue;
-      const P = intersect(li, lines[j]); if (!P) continue;
-      const x = P[0] | 0, y = P[1] | 0;
-      if (x<0 || x>=W || y<0 || y>=H) continue;
-      pts.push(x, y);
+
+      const P = intersect(li, lines[j]);
+      if (!P) continue;
+      const X = P[0], Y = P[1];
+      const cx = Math.round(X), cy = Math.round(Y);
+
+      // 화면 밖으로 나간 정도 계산
+      const dx = (cx < 0) ? -cx : (cx > (W-1) ? (cx-(W-1)) : 0);
+      const dy = (cy < 0) ? -cy : (cy > (H-1) ? (cy-(H-1)) : 0);
+      const overflow = Math.max(dx, dy);
+
+      // 반경 보정 (너무 커지지 않도록 캡)
+      const cap = Math.floor(Math.max(H, W) / 20);     // 최대 확대 한계
+      const r = rBase + Math.min(overflow * 3, cap);   // 바깥일수록 크게
+
+      cv.circle(mask, new cv.Point(cx, cy), r|0, new cv.Scalar(255,255,255,255), -1);
+
+      dotsPainted++; pairsTried++;
     }
   }
 
-  const mask = new cv.Mat.zeros(H, W, cv.CV_8U);
-  const M = mask.data;
-  for (let k=0; k<pts.length; k+=2){
-    const xs = Math.min(W-1, Math.max(0, pts[k]));
-    const ys = Math.min(H-1, Math.max(0, pts[k+1]));
-    M[ys*W + xs] = 255;
-  }
-
-  const r = Math.max(1, brushSize | 0);
-  let inv = new cv.Mat(); cv.bitwise_not(mask, inv);
-  let dist = new cv.Mat(); cv.distanceTransform(inv, dist, cv.DIST_L2, 3);
-  inv.delete();
-  let dil = new cv.Mat(); cv.threshold(dist, dil, r, 255, cv.THRESH_BINARY_INV);
-  dist.delete();
-  let maskDil = new cv.Mat(); dil.convertTo(maskDil, cv.CV_8U); dil.delete();
-  mask.delete();
-
   let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
-  const n = cv.connectedComponentsWithStats(maskDil, labels, stats, cents, 4, cv.CV_32S);
-  maskDil.delete(); stats.delete(); cents.delete();
+  const n = cv.connectedComponentsWithStats(mask, labels, stats, cents, 4, cv.CV_32S);
+  mask.delete(); stats.delete(); cents.delete();
 
+  if (typeof progress!=='undefined' && progress && typeof progress._log==='function'){
+    progress._log(`    • pairwise tried: ${pairsTried}`);
+    progress._log(`    • painted dots: ${dotsPainted}`);
+    progress._log(`    • components: ${Math.max(n-1,0)}`);
+  }
   return { count: Math.max(n-1,0), labels };
 }
 
