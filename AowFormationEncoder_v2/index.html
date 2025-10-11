@@ -850,11 +850,11 @@ async function detectAndRecognize(imgRGB, opts, progress){
     function idKey(i,j){ return String(parseInt(`${i}${j}`,10)); } // Python과 동일 키(“01”→“1”)
     for (let i=0;i<nGrid;i++){
       for (let j=0;j<nGrid;j++){
-        const qa = projectQuadByH(Hh_troop, gridQuadAlly(i,j));
+        const qa = projectQuad(Hh_troop, gridQuadAlly(i,j));
         const wa = warpByImagePts(imgRGB, qa, sizePatch);
         troopsAlly[idKey(i,j)] = wa;
     
-        const qe = projectQuadByH(Hh_troop, gridQuadEnemy(i,j));
+        const qe = projectQuad(Hh_troop, gridQuadEnemy(i,j));
         const we = warpByImagePts(imgRGB, qe, sizePatch);
         troopsEnemy[idKey(i,j)] = we;
       }
@@ -866,12 +866,12 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const hjEnemy= [[0,[7,3]],[1,[3.5,-1]],[2,[3.5,7]]];
     
     for (const [k,[ii,jj]] of hjAlly){
-      const qa = projectQuadByH(Hh_hero, gridQuadAlly(ii, jj));
+      const qa = projectQuad(Hh_hero, gridQuadAlly(ii, jj));
       const wa = warpByImagePts(imgRGB, qa, sizePatch);
       heroesAlly[String(k)] = wa;
     }
     for (const [k,[ii,jj]] of hjEnemy){
-      const qe = projectQuadByH(Hh_hero, gridQuadEnemy(ii, jj));
+      const qe = projectQuad(Hh_hero, gridQuadEnemy(ii, jj));
       const we = warpByImagePts(imgRGB, qe, sizePatch);
       heroesEnemy[String(k)] = we;
     }
