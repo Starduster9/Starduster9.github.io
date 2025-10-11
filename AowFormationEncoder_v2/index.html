@@ -580,27 +580,66 @@ async function detectAndRecognize(imgRGB, opts, progress){
   });
 
   const flatRefined = await progress.step('Morph + flat refine (fast)', 16, async ()=>{
-    const e_close=morph(e_log,'close',3,1);
-    let flat=new cv.Mat(); cv.bitwise_not(e_close, flat); e_close.delete();
-    const minAreaThin=(H*W/2000)|0; let flat2=removeThinComponents(flat, minAreaThin); flat.delete();
-    const ksize=(Math.max(H,W)/200)|0;
-    const flatDil=morph(flat2,'dilate',Math.max(1,ksize),1); // 자동 EDT
-    let flatNei=new cv.Mat(); cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
-    const bmask75=brightnessMask(gray,75);
-    let invB=new cv.Mat(); cv.bitwise_not(bmask75, invB); let flatNeiDark=new cv.Mat(); cv.bitwise_and(flatNei, invB, flatNeiDark); invB.delete();
-    let flat3=new cv.Mat(); cv.bitwise_or(flat2, flatNeiDark, flat3); flatNeiDark.delete(); flat2.delete();
-    const flatClean=removeThinComponents(flat3, (H*W/50)|0); flat3.delete();
-
+    const t0 = performance.now();
+  
+    const t1 = performance.now();
+    const e_close = morph(e_log,'close',3,1);
+    progress._log(`  [MR] morph(close): ${(performance.now()-t1).toFixed(1)} ms`);
+  
+    let flat = new cv.Mat();
+    cv.bitwise_not(e_close, flat); e_close.delete();
+  
+    const t2 = performance.now();
+    const minAreaThin = (H*W/2000)|0;
+    let flat2 = removeThinComponents(flat, minAreaThin); flat.delete();
+    progress._log(`  [MR] removeThinComponents #1: ${(performance.now()-t2).toFixed(1)} ms`);
+  
+    const t3 = performance.now();
+    const ksize = (Math.max(H,W)/200)|0;
+    const flatDil = morph(flat2,'dilate',Math.max(1,ksize),1); // 자동 EDT
+    let flatNei = new cv.Mat();
+    cv.bitwise_xor(flatDil, flat2, flatNei); flatDil.delete();
+    progress._log(`  [MR] morph(dilate)+xor: ${(performance.now()-t3).toFixed(1)} ms`);
+  
+    const t4 = performance.now();
+    const bmask75 = brightnessMask(gray,75);
+    let invB = new cv.Mat();
+    cv.bitwise_not(bmask75, invB);
+    let flatNeiDark = new cv.Mat();
+    cv.bitwise_and(flatNei, invB, flatNeiDark);
+    invB.delete();
+    progress._log(`  [MR] brightnessMask+bitwise_and: ${(performance.now()-t4).toFixed(1)} ms`);
+  
+    const t5 = performance.now();
+    let flat3 = new cv.Mat();
+    cv.bitwise_or(flat2, flatNeiDark, flat3);
+    flatNeiDark.delete(); flat2.delete();
+    const flatClean = removeThinComponents(flat3, (H*W/50)|0);
+    flat3.delete();
+    progress._log(`  [MR] merge + removeThinComponents #2: ${(performance.now()-t5).toFixed(1)} ms`);
+  
     // top2 라벨만 유지
-    let invFlat=new cv.Mat(); cv.bitwise_not(flatClean, invFlat);
-    let labels=new cv.Mat(), stats=new cv.Mat(), cents=new cv.Mat();
-    const ncc=cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
-    const areas=[]; for (let i=1;i<ncc;i++) areas.push({i, area:stats.intAt(i,cv.CC_STAT_AREA)});
-    areas.sort((a,b)=>a.area-b.area); const top2=new Set(areas.slice(-2).map(o=>o.i));
+    const t6 = performance.now();
+    let invFlat = new cv.Mat();
+    cv.bitwise_not(flatClean, invFlat);
+    let labels = new cv.Mat(), stats = new cv.Mat(), cents = new cv.Mat();
+    const ncc = cv.connectedComponentsWithStats(invFlat, labels, stats, cents, 4, cv.CV_32S);
+    const areas = [];
+    for (let i=1;i<ncc;i++) areas.push({i, area:stats.intAt(i,cv.CC_STAT_AREA)});
+    areas.sort((a,b)=>a.area-b.area);
+    const top2 = new Set(areas.slice(-2).map(o=>o.i));
     const maskTop2 = maskFromLabelsSet(labels, top2);
-    let flatRefined=new cv.Mat(); cv.bitwise_not(maskTop2, flatRefined);
+    progress._log(`  [MR] connectedComponents: ${(performance.now()-t6).toFixed(1)} ms`);
+  
+    const t7 = performance.now();
+    let flatRefined = new cv.Mat();
+    cv.bitwise_not(maskTop2, flatRefined);
     labels.delete(); stats.delete(); cents.delete(); maskTop2.delete(); invFlat.delete();
     dbg.push(['flat_refined_cc', flatRefined.clone()]);
+    progress._log(`  [MR] invert + dbg.clone: ${(performance.now()-t7).toFixed(1)} ms`);
+  
+    const tEnd = performance.now();
+    progress._log(`  [MR] total refine block: ${(tEnd-t0).toFixed(1)} ms`);
     return flatRefined;
   });
 
