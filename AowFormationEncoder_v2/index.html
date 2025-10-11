@@ -851,11 +851,11 @@ async function detectAndRecognize(imgRGB, opts, progress){
     for (let i=0;i<nGrid;i++){
       for (let j=0;j<nGrid;j++){
         const qa = projectQuad(Hh_troop, gridQuadAlly(i,j));
-        const wa = warpByImagePts(imgRGB, qa, sizePatch);
+        const wa = warpByPts(imgRGB, qa, sizePatch);
         troopsAlly[idKey(i,j)] = wa;
     
         const qe = projectQuad(Hh_troop, gridQuadEnemy(i,j));
-        const we = warpByImagePts(imgRGB, qe, sizePatch);
+        const we = warpByPts(imgRGB, qe, sizePatch);
         troopsEnemy[idKey(i,j)] = we;
       }
     }
@@ -867,12 +867,12 @@ async function detectAndRecognize(imgRGB, opts, progress){
     
     for (const [k,[ii,jj]] of hjAlly){
       const qa = projectQuad(Hh_hero, gridQuadAlly(ii, jj));
-      const wa = warpByImagePts(imgRGB, qa, sizePatch);
+      const wa = warpByPts(imgRGB, qa, sizePatch);
       heroesAlly[String(k)] = wa;
     }
     for (const [k,[ii,jj]] of hjEnemy){
       const qe = projectQuad(Hh_hero, gridQuadEnemy(ii, jj));
-      const we = warpByImagePts(imgRGB, qe, sizePatch);
+      const we = warpByPts(imgRGB, qe, sizePatch);
       heroesEnemy[String(k)] = we;
     }
 
