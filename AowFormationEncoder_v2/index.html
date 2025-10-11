@@ -395,11 +395,13 @@ async function detectAndRecognize(imgRGB, opts){
     for (let i=0;i<lbls.length;i++) for (let j=i+1;j<lbls.length;j++)
       linesBest.set(`${lbls[i]}-${lbls[j]}`, best);
   }
-  dist.delete(); lblMap.delete();
-
-  // 그래프 + 4사이클
-  const G=buildLabelGraphFromLines(lines, new cv.Mat());
-  const cycles=cycleBasis4(G);
+  // 그래프 + 4사이클: 반드시 lblMap 사용
+  const G = buildLabelGraphFromLines(lines, lblMap);
+  const cycles = cycleBasis4(G);
+  
+  // 이후에 안전하게 메모리 해제
+  dist.delete();
+  lblMap.delete();
 
   // 코너 후보 → 가장 큰 사각형
   const C=cornersFromCycles(linesBest, cycles);
