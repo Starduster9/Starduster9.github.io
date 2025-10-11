@@ -320,7 +320,7 @@ function clusterLinesByLabel(lines, labels){
   for (let idx=0; idx<lines.length; idx++){
     const {vals} = sampleLineVals(labels, lines[idx]);
     const s = new Set();
-    for (const v of vals){ if (v>=1) s.add(v); }
+    for (const v of vals){ if ((v|0) >= 1) s.add(v|0); }
     const arr = Array.from(s).sort((a,b)=>a-b);
     const key = arr.join('-');
     if (!clusters.has(key)) clusters.set(key, []);
@@ -344,15 +344,15 @@ function buildLabelGraphFromLines(lines, labels){
   const G = new jsnx.Graph();
   for (let idx=0; idx<lines.length; idx++){
     const {vals} = sampleLineVals(labels, lines[idx]);
-    const seq = vals.filter(v=>v>=1);
+    const seq = vals.map(v=>v|0).filter(v=>v>=1);
     if (seq.length<2) continue;
     // dedupe consecutive
     const uniq=[]; for (let k=0;k<seq.length;k++){ if (k===0||seq[k]!==seq[k-1]) uniq.push(seq[k]); }
     for (let k=0;k<uniq.length-1;k++){
       const a=uniq[k], b=uniq[k+1]; if (a===b) continue;
       if (G.hasEdge(a,b)){
-        const curr = G.getEdgeData(a,b).count || 0;
-        G.addEdge(a,b,{count:curr+1});
+        const curr = (G.getEdgeData(a,b).count || 0) + 1;
+        G.addEdge(a,b,{count:curr});
       } else { G.addEdge(a,b,{count:1}); }
     }
   }
