@@ -449,16 +449,6 @@ function countIntersectionsByPaint(lines, brushSize, angleDeg, imgShape){
 }
 
 /* ===== 간단 그래프 + 4사이클 ===== */
-(function(){
-  function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
-  class MiniGraph{
-    constructor(){ this.adj=new Map(); this.edges=new Map(); }
-    addEdge(a,b, data){
-      if (!this.adj.has(a)) this.adj.set(a,new Set());
-      if (!this.adj.has(b)) this.ad.set(b,new Set());
-    }
-  }
-})();
 function buildLabelGraphFromLines(lines, labels){
   // 경량 그래프
   function edgeKey(a,b){ return a<b ? (a+'-'+b) : (b+'-'+a); }
@@ -726,22 +716,90 @@ async function detectAndRecognize(imgRGB, opts, progress){
     const marginAE  = 0.125*borderLen;
     const marginBL  = 0.06*borderLen;
     const nGrid     = 7;
+    const heightTroop = 0.045 * borderLen;
+    const heightHero  = 0.09  * borderLen;
 
     // 경계(월드) 사각형
-    const allyBorder = [[0,0],[1,0],[1,1],[0,1]];
-    const enemyBorder= [[0,-marginAE-1],[1,-marginAE-1],[1,-marginAE],[0,-marginAE]];
+    const allyBorder = [[0,0],[borderLen,0],[borderLen,borderLen],[0,borderLen]];
+    const enemyBorder= [[0,-marginAE-borderLen],[borderLen,-marginAE-borderLen],[borderLen,-marginAE],[0,-marginAE]];
 
     // 내부(마진 적용) 사각형
-    const allyInner  = [[marginBL,marginBL],[1-marginBL,marginBL],[1-marginBL,1-marginBL],[marginBL,1-marginBL]];
-    const enemyInner = [
-      [0, -marginAE-1], [1, -marginAE-1], [1, -marginAE], [0, -marginAE]
-    ].map((p,idx)=>{
-      const mv=[[-marginBL,-marginBL],[ marginBL,-marginBL],[ marginBL, marginBL],[-marginBL, marginBL]][idx];
-      return [p[0]-mv[0], p[1]-mv[1]]; // (원 코드: border - margin_vec)
-    });
+    const marginVec = [[-marginBL,-marginBL],[ marginBL,-marginBL],[ marginBL, marginBL],[-marginBL, marginBL]];
+    const allyInner = allyBorder.map((p,idx)=>[p[0]-marginVec[idx][0], p[1]-marginVec[idx][1]]);
+    const enemyInner = enemyBorder.map((p,idx)=>[p[0]-marginVec[idx][0], p[1]-marginVec[idx][1]]);
 
     const formLen = 1 - 2*marginBL;
     const cell    = formLen / nGrid;
+
+    /* ===== 3x3 행렬 유틸 ===== */
+    function matMul3x3(A, B){
+      const C = [[0,0,0],[0,0,0],[0,0,0]];
+      for (let i=0;i<3;i++)
+        for (let j=0;j<3;j++)
+          C[i][j] = A[i][0]*B[0][j] + A[i][1]*B[1][j] + A[i][2]*B[2][j];
+      return C;
+    }
+    function matInv3x3(M){
+      const m = M.flat();
+      const a=m[0], b=m[1], c=m[2], d=m[3], e=m[4], f=m[5], g=m[6], h=m[7], i=m[8];
+      const A = e*i - f*h, B = -(d*i - f*g), C = d*h - e*g;
+      const D = -(b*i - c*h), E = a*i - c*g, F = -(a*h - b*g);
+      const G = b*f - c*e, H = -(a*f - c*d), I = a*e - b*d;
+      const det = a*A + b*B + c*C;
+      const invDet = 1.0 / det;
+      return [
+        [A*invDet, D*invDet, G*invDet],
+        [B*invDet, E*invDet, H*invDet],
+        [C*invDet, F*invDet, I*invDet]
+      ];
+    }
+    function toCv64F(M){
+      return cv.matFromArray(3,3,cv.CV_64F, [M[0][0],M[0][1],M[0][2], M[1][0],M[1][1],M[1][2], M[2][0],M[2][1],M[2][2]]);
+    }
+    
+    /* ===== 카메라 K (Python과 동일 가정: f=min(w,h), cx=w/2, cy=h/2) ===== */
+    function makeK(w,h){
+      const f = Math.min(w,h);
+      return [[f,0,w*0.5],[0,f,h*0.5],[0,0,1]];
+    }
+    
+    /* ===== H0 분해 → 높이 h의 평면 호모그래피 H(h) ===== */
+    function decomposeH0_getHh(H0, w, h){
+      // cv.Mat(3x3) → 2D 배열
+      const H = [
+        [H0.doubleAt(0,0), H0.doubleAt(0,1), H0.doubleAt(0,2)],
+        [H0.doubleAt(1,0), H0.doubleAt(1,1), H0.doubleAt(1,2)],
+        [H0.doubleAt(2,0), H0.doubleAt(2,1), H0.doubleAt(2,2)]
+      ];
+      const K    = makeK(w,h);
+      const Kinv = matInv3x3(K);
+    
+      // B = K^-1 H0 = [b1 b2 b3]
+      const B = matMul3x3(Kinv, H);
+      const b1 = [B[0][0],B[1][0],B[2][0]];
+      const b2 = [B[0][1],B[1][1],B[2][1]];
+      const b3 = [B[0][2],B[1][2],B[2][2]];
+    
+      const lam = 1.0 / Math.hypot(b1[0], b1[1], b1[2]);
+      const r1 = b1.map(v=>lam*v);
+      const r2 = b2.map(v=>lam*v);
+      const r3 = [
+        r1[1]*r2[2]-r1[2]*r2[1],
+        r1[2]*r2[0]-r1[0]*r2[2],
+        r1[0]*r2[1]-r1[1]*r2[0]
+      ];
+      const t  = b3.map(v=>lam*v);
+    
+      function getHh(height){
+        const col1 = r1, col2 = r2, col3 = [ t[0]-height*r3[0], t[1]-height*r3[1], t[2]-height*r3[2] ];
+        const Rt = [[col1[0],col2[0],col3[0]],
+                    [col1[1],col2[1],col3[1]],
+                    [col1[2],col2[2],col3[2]]];
+        const KH = matMul3x3(K, Rt);
+        return toCv64F(KH); // cv.Mat 3x3 CV_64F
+      }
+      return { getHh };
+    }
 
     // 퍼스펙티브 변환/프로젝션 유틸
     function getPerspectiveTransformFromPts(srcPts, dstPts){
@@ -763,6 +821,11 @@ async function detectAndRecognize(imgRGB, opts, progress){
     // H0: (월드 allyBorder → 이미지 사각형 ordered)
     const H0=getPerspectiveTransformFromPts(allyBorder, ordered);
 
+    // H(h) 생성 (Troop/Hero용) — Python의 compute_plane_transform 분해식
+    const { getHh } = decomposeH0_getHh(H0, imgRGB.cols, imgRGB.rows);
+    const Hh_troop = getHh(heightTroop);
+    const Hh_hero  = getHh(heightHero);
+
     // Ally/Enemy 전체 워프
     const allyInImg  = projectQuad(H0, allyBorder);
     const enemyInImg = projectQuad(H0, enemyBorder);
@@ -782,36 +845,38 @@ async function detectAndRecognize(imgRGB, opts, progress){
       return [[x0,y0],[x0+cell,y0],[x0+cell,y0+cell],[x0,y0+cell]];
     }
 
-    // Troops (7x7)
-    const troopsAlly={}, troopsEnemy={};
+    // Troops (7x7): 반드시 Hh_troop 사용
+    const troopsAlly = {}, troopsEnemy = {};
+    function idKey(i,j){ return String(parseInt(`${i}${j}`,10)); } // Python과 동일 키(“01”→“1”)
     for (let i=0;i<nGrid;i++){
       for (let j=0;j<nGrid;j++){
-        const qa = projectQuad(H0, gridQuadAlly(i,j));
-        const qe = projectQuad(H0, gridQuadEnemy(i,j));
-        const wa = warpByPts(imgRGB, qa, sizePatch);
-        const we = warpByPts(imgRGB, qe, sizePatch);
-        troopsAlly[`${i}${j}`]=wa;
-        troopsEnemy[`${i}${j}`]=we;
+        const qa = projectQuadByH(Hh_troop, gridQuadAlly(i,j));
+        const wa = warpByImagePts(imgRGB, qa, sizePatch);
+        troopsAlly[idKey(i,j)] = wa;
+    
+        const qe = projectQuadByH(Hh_troop, gridQuadEnemy(i,j));
+        const we = warpByImagePts(imgRGB, qe, sizePatch);
+        troopsEnemy[idKey(i,j)] = we;
       }
     }
-
-    // Heroes (3개) – Python 위치와 동일한 i,j 사용 (float 포함)
-    const heroesAlly={}, heroesEnemy={};
-    const hjAlly = [[0, [7, 3]], [1, [3, -1]], [2, [3, 7]]];
-    const hjEnemy= [[0, [7, 3]], [1, [3.5, -1]], [2, [3.5, 7]]];
-
-    for (const [k, ij] of hjAlly){
-      const [ii,jj]=ij;
-      const qa = projectQuad(H0, gridQuadAlly(ii, jj));
-      heroesAlly[String(k)] = warpByPts(imgRGB, qa, sizePatch);
+    
+    // Heroes (3): 반드시 Hh_hero 사용
+    const heroesAlly = {}, heroesEnemy = {};
+    const hjAlly = [[0,[7,3]],[1,[3,-1]],[2,[3,7]]];
+    const hjEnemy= [[0,[7,3]],[1,[3.5,-1]],[2,[3.5,7]]];
+    
+    for (const [k,[ii,jj]] of hjAlly){
+      const qa = projectQuadByH(Hh_hero, gridQuadAlly(ii, jj));
+      const wa = warpByImagePts(imgRGB, qa, sizePatch);
+      heroesAlly[String(k)] = wa;
     }
-    for (const [k, ij] of hjEnemy){
-      const [ii,jj]=ij;
-      const qe = projectQuad(H0, gridQuadEnemy(ii, jj));
-      heroesEnemy[String(k)] = warpByPts(imgRGB, qe, sizePatch);
+    for (const [k,[ii,jj]] of hjEnemy){
+      const qe = projectQuadByH(Hh_hero, gridQuadEnemy(ii, jj));
+      const we = warpByImagePts(imgRGB, qe, sizePatch);
+      heroesEnemy[String(k)] = we;
     }
 
-    H0.delete(); dist.delete();
+    H0.delete(); Hh_troop.delete(); Hh_hero.delete();
     return { ordered, allyWarp, enemyWarp, troopsAlly, troopsEnemy, heroesAlly, heroesEnemy };
   });
 
