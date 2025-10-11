@@ -214,6 +214,20 @@ function drawLinesOn(mat, lines, color=[255,0,0], thickness=2){
   }
   return out;
 }
+// Mat → <canvas>로 렌더링 (크기 자동 맞춤)
+function canvasFromMat(mat, canvasOrEl){
+  const canvas = (typeof canvasOrEl === 'string')
+    ? document.getElementById(canvasOrEl)
+    : canvasOrEl;
+  if (!canvas) throw new Error('canvas element not found');
+
+  // 캔버스 크기를 Mat 크기와 일치시켜야 cv.imshow가 정확히 그림
+  if (canvas.width !== mat.cols || canvas.height !== mat.rows){
+    canvas.width  = mat.cols;
+    canvas.height = mat.rows;
+  }
+  cv.imshow(canvas, mat);
+}
 
 /* ===== 빠른 히스토그램 분위수 ===== */
 function percentileGray(mat, perc){
