@@ -7,127 +7,196 @@
   <meta name="color-scheme" content="dark light" />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- OpenCV.js: Promise/구형 런타임 모두 지원하는 순차 CDN 로더 -->
+  <!-- OpenCV.js: 런타임 콜백 선등록 + Promise/객체 빌드 공통 처리 -->
   <script>
   (function(){
     const OPENCV_URLS = [
       'https://docs.opencv.org/4.10.0/opencv.js',
       'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js'
     ];
-    const LOAD_TIMEOUT_MS = 20000;
+    const SCRIPT_TIMEOUT_MS = 20000;
+    const RUNTIME_TIMEOUT_MS = 30000;
+    const POLL_INTERVAL_MS = 50;
+
+    let finished = false;
+    let runtimePollId = null;
+    let runtimeTimeoutId = null;
+    let thenHandlerAttached = false;
+    let resolveReady;
+    let rejectReady;
+
+    // 중요: 이 Promise는 cv 객체를 결과값으로 반환하지 않습니다.
+    // cv는 Emscripten thenable일 수 있어 Promise 결과로 반환하면
+    // 다시 thenable 해석이 걸려 초기화가 끝나지 않는 현상이 생길 수 있습니다.
+    window.cvReadyPromise = new Promise((resolve, reject) => {
+      resolveReady = resolve;
+      rejectReady = reject;
+    });
 
     function setCvStatus(text){
+      window.__cvStatusText = text;
       const status = document.getElementById('status');
       const templateStatus = document.getElementById('tplStatus');
       if (status) status.textContent = text;
       if (templateStatus) templateStatus.textContent = text;
     }
 
-    function withTimeout(promise, timeout, message){
-      let timer;
-      return Promise.race([
-        promise,
-        new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new Error(message)), timeout);
-        })
-      ]).finally(() => clearTimeout(timer));
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.__cvStatusText) setCvStatus(window.__cvStatusText);
+    }, { once: true });
+
+    function cvApiReady(candidate){
+      return !!(
+        candidate &&
+        candidate.Mat &&
+        typeof candidate.imread === 'function'
+      );
     }
 
-    function loadScript(src){
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        let settled = false;
-
-        const finish = (error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          script.onload = null;
-          script.onerror = null;
-
-          if (error) {
-            script.remove();
-            reject(error);
-          } else {
-            resolve(script);
-          }
-        };
-
-        const timer = setTimeout(() => {
-          finish(new Error('스크립트 로드 시간 초과: ' + src));
-        }, LOAD_TIMEOUT_MS);
-
-        script.src = src;
-        script.async = true;
-        script.onload = () => finish(null);
-        script.onerror = () => finish(new Error('스크립트 요청 실패: ' + src));
-        document.head.appendChild(script);
-      });
-    }
-
-    async function resolveCvModule(){
-      let cvModule = window.cv;
-      if (!cvModule) throw new Error('스크립트는 로드됐지만 window.cv가 없습니다.');
-
-      // 최신 OpenCV.js 빌드는 cv를 Promise로 노출할 수 있습니다.
-      if (typeof cvModule.then === 'function') {
-        cvModule = await withTimeout(
-          Promise.resolve(cvModule),
-          LOAD_TIMEOUT_MS,
-          'OpenCV Promise 초기화 시간 초과'
-        );
-      } else if (!cvModule.Mat || typeof cvModule.imread !== 'function') {
-        // 구형 빌드는 onRuntimeInitialized 콜백으로 준비 완료를 알립니다.
-        cvModule = await withTimeout(new Promise((resolve, reject) => {
-          const previousHandler = cvModule.onRuntimeInitialized;
-          cvModule.onRuntimeInitialized = function(){
-            try {
-              if (typeof previousHandler === 'function') previousHandler();
-            } finally {
-              resolve(cvModule);
-            }
-          };
-
-          // 콜백 등록 직전에 초기화가 끝난 경우를 한 번 더 확인합니다.
-          if (cvModule.Mat && typeof cvModule.imread === 'function') {
-            resolve(cvModule);
-          }
-        }), LOAD_TIMEOUT_MS, 'OpenCV 런타임 초기화 시간 초과');
+    function clearRuntimeWatch(){
+      if (runtimePollId !== null) {
+        clearInterval(runtimePollId);
+        runtimePollId = null;
       }
-
-      if (!cvModule || !cvModule.Mat || typeof cvModule.imread !== 'function') {
-        throw new Error('OpenCV API가 올바르게 초기화되지 않았습니다.');
+      if (runtimeTimeoutId !== null) {
+        clearTimeout(runtimeTimeoutId);
+        runtimeTimeoutId = null;
       }
-
-      window.cv = cvModule;
-      return cvModule;
     }
 
-    window.cvReadyPromise = (async function(){
-      let lastError = null;
+    function complete(candidate){
+      if (finished) return true;
 
-      for (const url of OPENCV_URLS) {
-        let script = null;
+      const module = cvApiReady(candidate) ? candidate : window.cv;
+      if (!cvApiReady(module)) return false;
+
+      finished = true;
+      clearRuntimeWatch();
+      window.cv = module;
+      setCvStatus('OpenCV.js 준비 완료');
+      resolveReady();
+      return true;
+    }
+
+    function fail(error){
+      if (finished) return;
+      finished = true;
+      clearRuntimeWatch();
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      setCvStatus('OpenCV.js 초기화 실패: ' + normalized.message);
+      rejectReady(normalized);
+    }
+
+    // 공식 OpenCV.js 방식: 스크립트 실행 전에 Module 콜백을 등록합니다.
+    const existingModule = (
+      window.Module && typeof window.Module === 'object'
+    ) ? window.Module : {};
+    const previousRuntimeHandler = existingModule.onRuntimeInitialized;
+
+    window.Module = Object.assign(existingModule, {
+      onRuntimeInitialized: function(){
         try {
-          setCvStatus('OpenCV.js 로딩 중… ' + url);
-          script = await loadScript(url);
-          setCvStatus('OpenCV.js 초기화 중…');
-
-          const cvModule = await resolveCvModule();
-          setCvStatus('OpenCV.js 준비 완료');
-          return cvModule;
-        } catch (error) {
-          lastError = error;
-          console.error('[OpenCV.js]', url, error);
-          if (script) script.remove();
-          try { delete window.cv; } catch (_) { window.cv = undefined; }
+          if (typeof previousRuntimeHandler === 'function') {
+            previousRuntimeHandler.apply(this, arguments);
+          }
+        } finally {
+          complete(window.cv);
         }
       }
+    });
 
-      const message = lastError?.message || String(lastError || '알 수 없는 오류');
-      setCvStatus('OpenCV.js 로드 실패: ' + message);
-      throw lastError || new Error(message);
-    })();
+    function watchRuntime(){
+      if (finished || runtimePollId !== null) return;
+
+      const startedAt = performance.now();
+      let lastShownSecond = -1;
+
+      const check = () => {
+        if (finished) return;
+
+        const current = window.cv;
+        if (complete(current)) return;
+
+        // Promise/thenable 빌드는 직접 콜백만 붙이고,
+        // native Promise의 결과값으로 cv를 다시 반환하지 않습니다.
+        if (
+          current &&
+          typeof current.then === 'function' &&
+          !thenHandlerAttached
+        ) {
+          thenHandlerAttached = true;
+          try {
+            current.then(
+              resolvedModule => {
+                if (cvApiReady(resolvedModule)) window.cv = resolvedModule;
+                complete(resolvedModule);
+              },
+              error => fail(error)
+            );
+          } catch (error) {
+            fail(error);
+            return;
+          }
+        }
+
+        const elapsedSecond = Math.floor((performance.now() - startedAt) / 1000);
+        if (elapsedSecond !== lastShownSecond) {
+          lastShownSecond = elapsedSecond;
+          setCvStatus(`OpenCV.js 초기화 중… ${elapsedSecond}초`);
+        }
+      };
+
+      check();
+      runtimePollId = setInterval(check, POLL_INTERVAL_MS);
+      runtimeTimeoutId = setTimeout(() => {
+        fail(new Error('런타임 초기화 시간 초과'));
+      }, RUNTIME_TIMEOUT_MS);
+    }
+
+    function loadScriptAt(index){
+      if (index >= OPENCV_URLS.length) {
+        fail(new Error('모든 OpenCV.js CDN 요청에 실패했습니다.'));
+        return;
+      }
+
+      const url = OPENCV_URLS[index];
+      const script = document.createElement('script');
+      let settled = false;
+
+      setCvStatus('OpenCV.js 다운로드 중…');
+      script.src = url;
+      script.async = true;
+      script.crossOrigin = 'anonymous';
+
+      const loadTimeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        script.remove();
+        console.warn('[OpenCV.js] 다운로드 시간 초과:', url);
+        loadScriptAt(index + 1);
+      }, SCRIPT_TIMEOUT_MS);
+
+      script.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(loadTimeoutId);
+        setCvStatus('OpenCV.js 초기화 중… 0초');
+        watchRuntime();
+      };
+
+      script.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(loadTimeoutId);
+        script.remove();
+        console.warn('[OpenCV.js] 다운로드 실패:', url);
+        loadScriptAt(index + 1);
+      };
+
+      document.head.appendChild(script);
+    }
+
+    loadScriptAt(0);
   })();
   </script>
 
@@ -332,19 +401,19 @@
     return !!(cvReady && window.cv && cv.Mat && typeof cv.imread === 'function');
   }
 
-  async function waitForCvReady(timeout=20000){
+  async function waitForCvReady(timeout=30000){
     if (cvIsReady()) return window.cv;
 
     let timer;
     try {
-      const cvModule = await Promise.race([
+      await Promise.race([
         window.cvReadyPromise,
         new Promise((_, reject) => {
           timer=setTimeout(() => reject(new Error('OpenCV 초기화 시간 초과')), timeout);
         })
       ]);
       onCvReady();
-      return cvModule;
+      return window.cv;
     } finally {
       clearTimeout(timer);
     }
