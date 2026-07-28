@@ -398,11 +398,20 @@
     });
 
   function cvIsReady(){
-    return !!(cvReady && window.cv && cv.Mat && typeof cv.imread === 'function');
+    // 별도 플래그가 아닌 실제 OpenCV API를 기준으로 판단합니다.
+    return !!(
+      window.cv &&
+      cv.Mat &&
+      typeof cv.imread === 'function' &&
+      typeof cv.cvtColor === 'function'
+    );
   }
 
   async function waitForCvReady(timeout=30000){
-    if (cvIsReady()) return window.cv;
+    if (cvIsReady()) {
+      onCvReady();
+      return window.cv;
+    }
 
     let timer;
     try {
@@ -412,10 +421,15 @@
           timer=setTimeout(() => reject(new Error('OpenCV 초기화 시간 초과')), timeout);
         })
       ]);
+
+      if (!cvIsReady()) {
+        throw new Error('OpenCV 준비 신호는 받았지만 API를 사용할 수 없습니다.');
+      }
+
       onCvReady();
       return window.cv;
     } finally {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     }
   }
 /* ============== Common CV Utils (subset from previous demo) ============== */
@@ -1177,37 +1191,68 @@ function encodeLayoutToBase64(layout) {
   const statusEl = document.getElementById('status');
   let isRunning = false;
 
-  fileInput.addEventListener('change', async e => {
+  if (!fileInput) {
+    throw new Error('이미지 파일 입력 요소를 찾을 수 없습니다.');
+  }
+
+  fileInput.addEventListener('change', e => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
 
+    statusEl.textContent = '이미지 파일 읽는 중…';
+
+    // 같은 파일을 다시 선택해도 change 이벤트가 발생하도록 값을 미리 비웁니다.
+    e.target.value = '';
+
     const url = URL.createObjectURL(f);
     const img = new Image();
+
+    // 파일을 선택하자마자 썸네일 영역에 반응을 보여줍니다.
+    if (thumb) {
+      thumb.src = url;
+      thumb.hidden = false;
+      thumb.style.display = 'block';
+    }
+
     img.onload = async () => {
-      try{
+      try {
+        statusEl.textContent = 'OpenCV 상태 확인 중…';
         await waitForCvReady();
-        if (srcMat) srcMat.delete();
+
+        statusEl.textContent = '이미지 변환 준비 중…';
+        if (srcMat) {
+          srcMat.delete();
+          srcMat = null;
+        }
         srcMat = matFromImage(img);
 
-        // 썸네일 표시
-        if (thumb) {
-          thumb.src = URL.createObjectURL(f);
-          thumb.hidden = false;
-          thumb.style.display = 'block';
+        const cOrig = document.getElementById('cOrig');
+        if (cOrig) {
+          cOrig.width = srcMat.cols;
+          cOrig.height = srcMat.rows;
+          canvasFromMat(srcMat, cOrig);
         }
 
-        // 접힌 영역 원본 미리보기
-        const cOrig = document.getElementById('cOrig');
-        if (cOrig){ cOrig.width = srcMat.cols; cOrig.height = srcMat.rows; canvasFromMat(srcMat, cOrig); }
-
+        statusEl.textContent = '자동 변환 시작…';
         await runConversion();
-      } catch(err){
-        alert('이미지를 처리할 수 없습니다: ' + (err?.message || err));
+      } catch (err) {
+        const message = err?.message || String(err);
+        console.error('이미지 처리 실패:', err);
+        statusEl.textContent = '이미지 처리 실패: ' + message;
+        const logEl = document.getElementById('log');
+        if (logEl) logEl.textContent += '✖ 이미지 처리 실패: ' + message + '\n';
+        alert('이미지를 처리할 수 없습니다: ' + message);
       } finally {
         URL.revokeObjectURL(url);
       }
     };
-    img.onerror = () => { URL.revokeObjectURL(url); alert('이미지 로드 실패'); };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      statusEl.textContent = '이미지 파일을 읽지 못했습니다.';
+      alert('이미지 로드 실패');
+    };
+
     img.src = url;
   });
 
@@ -1233,8 +1278,13 @@ function encodeLayoutToBase64(layout) {
   });
 
   async function runConversion() {
-    if (isRunning) return;
-    if (!cvReady || !srcMat) return;
+    if (isRunning) {
+      statusEl.textContent = '이미지 변환이 이미 진행 중입니다.';
+      return;
+    }
+    if (!srcMat) throw new Error('변환할 이미지가 준비되지 않았습니다.');
+
+    await waitForCvReady();
 
     isRunning = true;
     statusEl.textContent = '이미지 업로드 완료, 자동 변환 중…';
